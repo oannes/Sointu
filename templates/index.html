@@ -6,7 +6,7 @@
   <form method="post" action="{{ url_for('select_reviewers') }}">
     <label>{{ _("Choose existing population") }}</label>
     <select name="population_name">
-      <option value="">— none —</option>
+      <option value="">{{ _("— none —") }}</option>
       {% for pop in existing_populations %}
       <option value="{{ pop }}">{{ pop }} ({{ existing_populations[pop]|length }} personas)</option>
       {% endfor %}

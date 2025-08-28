@@ -73,6 +73,16 @@ def index():
         existing = {}
     return render_template("index.html", existing_populations=existing, title="Sointu — Select reviewers")
 
+@app.route("/populations")
+def populations():
+    pops = get_all_populations()
+    return render_template("populations.html", pops=pops)
+
+@app.route("/population/<int:pid>")
+def show_population(pid):
+    personas = get_personas_by_population_id(pid)
+    return render_template("population.html", personas=personas)
+
 @app.post("/select_reviewers")
 def select_reviewers():
     ensure_state()
@@ -152,9 +162,10 @@ def persona_to_identity(role: dict) -> str:
 def reviewer_comment(client: OpenAI, role: dict, content: str) -> tuple[str,int|None]:
     locale = str(get_locale()) or 'fi'
     if locale.startswith('fi'):
-        identity = "Olet personoitu arvioija. " + persona_to_identity(role)
-        prompt = ("Lue käyttäjän sisältö ja kirjoita YKSI lyhyt kappale... "
-                  "Jos sopii, sisällytä yksi numeerinen pisteytys 0–10.\n\n"
+        identity = "Kerro, miten käyttäjän tuottama sisältö resonoi seuraavaksi kuvatulle persoonalle:" + persona_to_identity(role)
+        prompt = ("Lue käyttäjän sisältö ja kirjoita YKSI lyhyt kappale joka kuvaa ensimmäisessä persoonassa sitä, miten kuvattu persoona todennäköisesti suhtautuu viestiin."
+                  "Tee vastauksestasi elämänmakuinen ja pyri tarkastelemaan viestiä edustamasi ihmisen eletyn elämän näkökulmista."
+                  "Sisällytä yksi numeerinen pisteytys 0–10.\n\n"
                   "KÄYTTÄJÄN SISÄLTÖ:\n" + content)
     else:
         identity = persona_to_identity(role)
@@ -220,7 +231,7 @@ def suggestions_from_news(user_text: str, articles: list[dict]) -> str:
     locale = str(get_locale()) or 'fi'
     # Use your provided main.generate_gpt_response to create suggestions
     if locale.startswith('fi'):
-        identity = "Olet viestintästrategi, joka lukee tuoreita uutisia..."
+        identity = "Tehtäväsi on tunnistaa, mihin viimeaikaisiin keskustelunaiheisiin käyttäjän tuottama teksti liittyy"
         prompt = (
           "Tässä käyttäjän viesti:\n"
           f"{user_text}\n\n"

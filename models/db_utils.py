@@ -6,6 +6,10 @@ from dotenv import load_dotenv
 from contextlib import contextmanager
 from .generateParticipants import Persona
 import json
+from sqlalchemy import create_engine
+
+
+engine = create_engine(os.environ["DATABASE_URL"])
 
 # Load environment variables
 load_dotenv()
@@ -23,9 +27,18 @@ def get_db_connection():
 def setup_database():
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS populations (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                location TEXT,
+                created_at TIMESTAMP DEFAULT now()
+            );
+        """)
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS personas (
                 id SERIAL PRIMARY KEY,
+                population_id INT REFERENCES populations(id) ON DELETE CASCADE,
                 name TEXT NOT NULL,
                 age INTEGER NOT NULL,
                 gender TEXT NOT NULL,
@@ -42,7 +55,6 @@ def setup_database():
                 values_and_beliefs TEXT,
                 perspective_on_change TEXT,
                 daily_routine TEXT,
-                population TEXT NOT NULL
             )
         ''')
         # New table for discussion data
@@ -63,6 +75,44 @@ def setup_database():
             )
         ''')
         conn.commit()
+
+def save_population(name, location, personas):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # create population
+            cur.execute(
+                "INSERT INTO populations (name, location) VALUES (%s, %s) RETURNING id",
+                (name, location)
+            )
+            population_id = cur.fetchone()[0]
+
+            # insert personas
+            for p in personas:
+                cur.execute("""
+                    INSERT INTO personas (
+                        population_id, name, age, gender, occupation, education,
+                        income_level, financial_security, main_concern, source_of_joy,
+                        social_ties, values_and_beliefs, perspective_on_change, daily_routine
+                    ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (
+                    population_id, p.name, p.age, p.gender, p.occupation, p.education,
+                    p.income_level, p.financial_security, p.main_concern, p.source_of_joy,
+                    p.social_ties, p.values_and_beliefs, p.perspective_on_change, p.daily_routine
+                ))
+        conn.commit()
+    return population_id
+
+def get_all_populations():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, name, location FROM populations ORDER BY created_at DESC")
+            return cur.fetchall()
+
+def get_personas_by_population_id(population_id):
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM personas WHERE population_id=%s", (population_id,))
+            return cur.fetchall()
 
 def save_discussion_data_to_db(population, discussion_data):
     with get_db_connection() as conn:
