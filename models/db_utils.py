@@ -22,6 +22,10 @@ except Exception:
 load_dotenv()
 DATABASE_URL = os.environ["DATABASE_URL"]
 
+# Heroku antaa usein postgres://, muutetaan SQLAlchemylle sopivaksi:
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+
 # Heroku Postgres often wants SSL; SQLAlchemy handles via querystring if present
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)

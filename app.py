@@ -12,6 +12,10 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
 app.config['BABEL_DEFAULT_LOCALE'] = 'fi'
 app.config['BABEL_SUPPORTED_LOCALES'] = ['fi', 'en']
+app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db = SQLAlchemy(app)
 
 babel = Babel(app)
 
