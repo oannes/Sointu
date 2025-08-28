@@ -222,6 +222,66 @@ def save_nps_results_to_db(population, nps_results):
         s.flush()
         return row.id
 
+def get_or_create_user_session(conn, sid, lang=None):
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM user_sessions WHERE id=%s", (sid,))
+        row = cur.fetchone()
+        if not row:
+            cur.execute(
+                "INSERT INTO user_sessions (id, lang) VALUES (%s, %s)",
+                (sid, lang or 'en')
+            )
+        else:
+            if lang:
+                cur.execute("UPDATE user_sessions SET lang=%s WHERE id=%s", (lang, sid))
+    conn.commit()
+
+def create_run(conn, sid, population_id, content_text):
+    run_id = uuid.uuid4().hex
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO runs (id, session_id, population_id, content_text)
+            VALUES (%s, %s, %s, %s)
+        """, (run_id, sid, population_id, content_text))
+    conn.commit()
+    return run_id
+
+def get_latest_run(conn, sid):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT id, population_id, content_text
+            FROM runs
+            WHERE session_id=%s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (sid,))
+        return cur.fetchone()
+
+def add_chat_message(conn, run_id, author, text, score=None, persona_id=None):
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO chat_messages (run_id, author, text, score, persona_id)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (run_id, author, text, score, persona_id))
+    conn.commit()
+
+def get_chat_by_run(conn, run_id):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT author, text, score
+            FROM chat_messages
+            WHERE run_id=%s
+            ORDER BY created_at ASC
+        """, (run_id,))
+        return [{"name": r[0], "text": r[1], "score": r[2]} for r in cur.fetchall()]
+
+def save_news_analysis(conn, run_id, result_json):
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO news_analysis (run_id, result_json)
+            VALUES (%s, %s)
+        """, (run_id, json.dumps(result_json)))
+    conn.commit()
 
 def get_nps_results_from_db(nps_id):
     with get_session() as s:

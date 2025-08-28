@@ -3,8 +3,11 @@ import os, re, json
 from flask import Flask, request, render_template, redirect, url_for, session, flash
 from dotenv import load_dotenv
 from openai import OpenAI
-from flask_babel import get_locale, Babel, _
+from flask_babel import Babel, gettext as _t
 from flask_sqlalchemy import SQLAlchemy
+import uuid
+
+app.jinja_env.globals.update(_=_t) 
 
 load_dotenv()
 
@@ -32,6 +35,11 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 babel = Babel(app)
+
+@app.before_request
+def ensure_sid():
+    if 'sid' not in session:
+        session['sid'] = uuid.uuid4().hex
 
 def select_locale():
     from flask import request, session
@@ -106,7 +114,7 @@ def select_reviewers():
     ensure_state()
     pop = request.form.get("population_name") or ""
     if not pop:
-        flash(_("Please choose a population or generate a new one."))
+        flash(_t("Please choose a population or generate a new one."))
         return redirect(url_for("index"))
     # Load persons from DB
     try:
@@ -115,7 +123,7 @@ def select_reviewers():
     except Exception as e:
         persons = []
     if not persons:
-        flash(_("No personas found for that population. Generate a new one instead."))
+        flash(_t("No personas found for that population. Generate a new one instead."))
         return redirect(url_for("index"))
     session["population_name"] = pop
     session["reviewers"] = persons
@@ -149,7 +157,7 @@ def generate_population():
 
     session["population_name"] = name
     session["reviewers"] = reviewers
-    flash(_(f"Generated {len(reviewers)} personas for population '{name}'."))
+    flash(_t(f"Generated {len(reviewers)} personas for population '{name}'."))
     return redirect(url_for("submit_content"))
 
 @app.get("/submit")
@@ -163,7 +171,7 @@ def submit_content_post():
     session["user_content"] = (request.form.get("content") or "").strip()
     session["user_title"] = (request.form.get("title") or "").strip()
     if not session["user_content"]:
-        flash(_("Please paste your content text."))
+        flash(_t("Please paste your content text."))
         return redirect(url_for("submit_content"))
     return redirect(url_for("chat"))
 
