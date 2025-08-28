@@ -5,3 +5,6 @@ openai
 gnews
 feedparser
 psycopg2-binary
+
+numpy
+pydantic
