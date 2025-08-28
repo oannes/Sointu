@@ -1,13 +1,12 @@
-# db_utils.py  — SQLAlchemy-only version
-
 import os
 import json
+import uuid
 from contextlib import contextmanager
 from dotenv import load_dotenv
 
 from sqlalchemy import (
     create_engine, MetaData, Table, Column, Integer, BigInteger, Text, DateTime,
-    ForeignKey, func, select, insert, and_, String
+    ForeignKey, func, select, String
 )
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.dialects.postgresql import JSONB
@@ -26,7 +25,6 @@ DATABASE_URL = os.environ["DATABASE_URL"]
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
 
-# Heroku Postgres often wants SSL; SQLAlchemy handles via querystring if present
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 Base = declarative_base(metadata=MetaData(schema=None))  # default public schema
@@ -47,7 +45,7 @@ class PersonaRow(Base):
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     population_id = Column(Integer, ForeignKey("populations.id", ondelete="CASCADE"), index=True)
 
-    # Core attributes
+    # Core attributes (NOT NULL -> anna vähintään tyhjät arvot tallennettaessa)
     name = Column(Text, nullable=False)
     age = Column(Integer, nullable=False)
     gender = Column(Text, nullable=False)
@@ -73,15 +71,59 @@ class PersonaRow(Base):
 class Discussion(Base):
     __tablename__ = "discussions"
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    population = Column(Text, nullable=False)  # keeping your existing API (string key)
+    population = Column(Text, nullable=False)  # string key preserved
     discussion_data = Column(JSONB, nullable=False)
 
 
 class NpsResult(Base):
     __tablename__ = "nps_results"
     id = Column(BigInteger, primary_key=True, autoincrement=True)
-    population = Column(Text, nullable=False)  # keeping your existing API (string key)
+    population = Column(Text, nullable=False)  # string key preserved
     nps_data = Column(JSONB, nullable=False)
+
+
+# --- New models to keep state server-side ---
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    id = Column(String, primary_key=True)  # uuid hex
+    lang = Column(Text, default="en", nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+
+class Run(Base):
+    __tablename__ = "runs"
+    id = Column(String, primary_key=True)  # uuid hex
+    session_id = Column(String, ForeignKey("user_sessions.id", ondelete="CASCADE"), nullable=False)
+    population_id = Column(Integer, ForeignKey("populations.id", ondelete="SET NULL"))
+    content_text = Column(Text)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    session = relationship("UserSession")
+    population = relationship("Population")
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    run_id = Column(String, ForeignKey("runs.id", ondelete="CASCADE"), nullable=False)
+    persona_id = Column(Integer, ForeignKey("personas.id", ondelete="SET NULL"), nullable=True)
+    author = Column(Text, nullable=False)  # 'persona' / 'system' / 'user' / tms.
+    text = Column(Text, nullable=False)
+    score = Column(Integer, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    run = relationship("Run")
+    persona = relationship("PersonaRow")
+
+
+class NewsAnalysis(Base):
+    __tablename__ = "news_analysis"
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    run_id = Column(String, ForeignKey("runs.id", ondelete="CASCADE"), nullable=False)
+    result_json = Column(JSONB, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+
+    run = relationship("Run")
 
 
 # --- Session helper ---
@@ -106,39 +148,34 @@ def setup_database():
 
 # --- Utility: get or create a Population by name ---
 def _get_or_create_population(session, name: str, location: str | None = None) -> Population:
-    pop = session.execute(
-        select(Population).where(Population.name == name)
-    ).scalar_one_or_none()
+    pop = session.execute(select(Population).where(Population.name == name)).scalar_one_or_none()
     if pop:
-        # Fill missing location if provided now
         if location and not pop.location:
             pop.location = location
         return pop
-
     pop = Population(name=name, location=location)
     session.add(pop)
-    session.flush()  # assigns pop.id
+    session.flush()
     return pop
 
 
-# --- Public API (kept similar to your original) ---
+# --- Public API ---
 
 def save_population(name, location, personas):
     """
-    Create a population and insert given personas (list of objects with attributes).
+    Create a population and insert given personas (list of objects/dicts).
     Returns population_id.
     """
     with get_session() as s:
         pop = _get_or_create_population(s, name=name, location=location)
-        # Insert personas
         for p in personas:
-            # persona may be an object or dict
-            pdict = p.model_dump() if hasattr(p, "model_dump") else (
-                p.dict() if hasattr(p, "dict") else dict(p)
+            pdict = (
+                p.model_dump() if hasattr(p, "model_dump")
+                else (p.dict() if hasattr(p, "dict") else dict(p))
             )
             s.add(PersonaRow(
                 population_id=pop.id,
-                name=pdict.get("name"),
+                name=pdict.get("name") or "",
                 age=int(pdict.get("age")) if pdict.get("age") is not None else 0,
                 gender=pdict.get("gender") or "",
                 orientation=pdict.get("orientation") or "",
@@ -166,39 +203,35 @@ def get_all_populations():
             select(Population.id, Population.name, Population.location)
             .order_by(Population.created_at.desc())
         ).all()
-        return rows  # list of tuples
+        return rows
 
 
 def get_personas_by_population_id(population_id):
-    """Return all persona rows for a population_id (as list of tuples via .all())."""
+    """Return all persona dicts for a population_id."""
     with get_session() as s:
         rows = s.execute(
             select(PersonaRow).where(PersonaRow.population_id == population_id)
         ).scalars().all()
-        # To keep compatibility with your earlier psycopg2 fetchall, you might return dicts:
-        result = []
-        for r in rows:
-            result.append({
-                "id": r.id,
-                "population_id": r.population_id,
-                "name": r.name,
-                "age": r.age,
-                "gender": r.gender,
-                "orientation": r.orientation,
-                "location": r.location,
-                "mbti_type": r.mbti_type,
-                "occupation": r.occupation,
-                "education": r.education,
-                "income_level": r.income_level,
-                "financial_security": r.financial_security,
-                "main_concern": r.main_concern,
-                "source_of_joy": r.source_of_joy,
-                "social_ties": r.social_ties,
-                "values_and_beliefs": r.values_and_beliefs,
-                "perspective_on_change": r.perspective_on_change,
-                "daily_routine": r.daily_routine,
-            })
-        return result
+        return [{
+            "id": r.id,
+            "population_id": r.population_id,
+            "name": r.name,
+            "age": r.age,
+            "gender": r.gender,
+            "orientation": r.orientation,
+            "location": r.location,
+            "mbti_type": r.mbti_type,
+            "occupation": r.occupation,
+            "education": r.education,
+            "income_level": r.income_level,
+            "financial_security": r.financial_security,
+            "main_concern": r.main_concern,
+            "source_of_joy": r.source_of_joy,
+            "social_ties": r.social_ties,
+            "values_and_beliefs": r.values_and_beliefs,
+            "perspective_on_change": r.perspective_on_change,
+            "daily_routine": r.daily_routine,
+        } for r in rows]
 
 
 def save_discussion_data_to_db(population, discussion_data):
@@ -222,66 +255,6 @@ def save_nps_results_to_db(population, nps_results):
         s.flush()
         return row.id
 
-def get_or_create_user_session(conn, sid, lang=None):
-    with conn.cursor() as cur:
-        cur.execute("SELECT id FROM user_sessions WHERE id=%s", (sid,))
-        row = cur.fetchone()
-        if not row:
-            cur.execute(
-                "INSERT INTO user_sessions (id, lang) VALUES (%s, %s)",
-                (sid, lang or 'en')
-            )
-        else:
-            if lang:
-                cur.execute("UPDATE user_sessions SET lang=%s WHERE id=%s", (lang, sid))
-    conn.commit()
-
-def create_run(conn, sid, population_id, content_text):
-    run_id = uuid.uuid4().hex
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO runs (id, session_id, population_id, content_text)
-            VALUES (%s, %s, %s, %s)
-        """, (run_id, sid, population_id, content_text))
-    conn.commit()
-    return run_id
-
-def get_latest_run(conn, sid):
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT id, population_id, content_text
-            FROM runs
-            WHERE session_id=%s
-            ORDER BY created_at DESC
-            LIMIT 1
-        """, (sid,))
-        return cur.fetchone()
-
-def add_chat_message(conn, run_id, author, text, score=None, persona_id=None):
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO chat_messages (run_id, author, text, score, persona_id)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (run_id, author, text, score, persona_id))
-    conn.commit()
-
-def get_chat_by_run(conn, run_id):
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT author, text, score
-            FROM chat_messages
-            WHERE run_id=%s
-            ORDER BY created_at ASC
-        """, (run_id,))
-        return [{"name": r[0], "text": r[1], "score": r[2]} for r in cur.fetchall()]
-
-def save_news_analysis(conn, run_id, result_json):
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO news_analysis (run_id, result_json)
-            VALUES (%s, %s)
-        """, (run_id, json.dumps(result_json)))
-    conn.commit()
 
 def get_nps_results_from_db(nps_id):
     with get_session() as s:
@@ -290,13 +263,9 @@ def get_nps_results_from_db(nps_id):
 
 
 def save_persona_to_db(persona, population_name):
-    """
-    Save a single persona under population_name (creating the population if needed).
-    Returns assigned persona id.
-    """
+    """Save a single persona under population_name. Returns persona id."""
     with get_session() as s:
         pop = _get_or_create_population(s, name=population_name, location=None)
-        # normalize persona to dict
         if hasattr(persona, "model_dump"):
             pdata = persona.model_dump()
         elif hasattr(persona, "dict"):
@@ -306,7 +275,7 @@ def save_persona_to_db(persona, population_name):
 
         row = PersonaRow(
             population_id=pop.id,
-            name=pdata.get("name"),
+            name=pdata.get("name") or "",
             age=int(pdata.get("age")) if pdata.get("age") is not None else 0,
             gender=pdata.get("gender") or "",
             orientation=pdata.get("orientation") or "",
@@ -329,12 +298,8 @@ def save_persona_to_db(persona, population_name):
 
 
 def get_personas_by_population():
-    """
-    Return dict: { population_name: [ persona_dict, ... ], ... }
-    Matches your current Flask usage.
-    """
+    """Return dict: { population_name: [ persona_dict, ... ], ... }"""
     with get_session() as s:
-        # Join personas with populations to get the readable population name
         rows = s.execute(
             select(
                 Population.name.label("population"),
@@ -382,34 +347,56 @@ def get_personas_by_population():
         return populations
 
 
-def print_personas_from_db(fields=["name", "age", "location", "occupation"]):
-    """
-    Prints specified fields from personas in the database.
-    """
-    # map allowed fields to columns
-    colmap = {
-        "name": PersonaRow.name,
-        "age": PersonaRow.age,
-        "location": PersonaRow.location,
-        "occupation": PersonaRow.occupation,
-        "gender": PersonaRow.gender,
-        "orientation": PersonaRow.orientation,
-        "mbti_type": PersonaRow.mbti_type,
-        "education": PersonaRow.education,
-        "income_level": PersonaRow.income_level,
-        "financial_security": PersonaRow.financial_security,
-        "main_concern": PersonaRow.main_concern,
-        "source_of_joy": PersonaRow.source_of_joy,
-        "social_ties": PersonaRow.social_ties,
-        "values_and_beliefs": PersonaRow.values_and_beliefs,
-        "perspective_on_change": PersonaRow.perspective_on_change,
-        "daily_routine": PersonaRow.daily_routine,
-    }
-    selected_cols = [colmap[f] for f in fields if f in colmap]
+# --- Server-side session helpers (ORM versions) ---
 
+def get_or_create_user_session(sid: str, lang: str | None = None):
     with get_session() as s:
-        rows = s.execute(select(*selected_cols)).all()
+        us = s.get(UserSession, sid)
+        if not us:
+            us = UserSession(id=sid, lang=lang or "en")
+            s.add(us)
+            s.flush()
+        else:
+            if lang:
+                us.lang = lang
+        return us.id
 
-    print("Generated Personas:")
-    for row in rows:
-        print(", ".join(f"{field}: {value}" for field, value in zip(fields, row)))
+def create_run(sid: str, population_id: int | None, content_text: str | None):
+    run_id = uuid.uuid4().hex
+    with get_session() as s:
+        r = Run(id=run_id, session_id=sid, population_id=population_id, content_text=content_text)
+        s.add(r)
+        s.flush()
+        return r.id
+
+def get_latest_run(sid: str):
+    with get_session() as s:
+        r = s.execute(
+            select(Run).where(Run.session_id == sid).order_by(Run.created_at.desc()).limit(1)
+        ).scalars().first()
+        if not r:
+            return None
+        return {"id": r.id, "population_id": r.population_id, "content_text": r.content_text}
+
+def add_chat_message(run_id: str, author: str, text: str, score: int | None = None, persona_id: int | None = None):
+    with get_session() as s:
+        m = ChatMessage(run_id=run_id, author=author, text=text, score=score, persona_id=persona_id)
+        s.add(m)
+        s.flush()
+        return m.id
+
+def get_chat_by_run(run_id: str):
+    with get_session() as s:
+        rows = s.execute(
+            select(ChatMessage.author, ChatMessage.text, ChatMessage.score)
+            .where(ChatMessage.run_id == run_id)
+            .order_by(ChatMessage.created_at.asc())
+        ).all()
+        return [{"name": r.author, "text": r.text, "score": r.score} for r in rows]
+
+def save_news_analysis(run_id: str, result_json: dict):
+    with get_session() as s:
+        na = NewsAnalysis(run_id=run_id, result_json=result_json)
+        s.add(na)
+        s.flush()
+        return na.id
