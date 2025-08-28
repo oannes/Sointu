@@ -26,3 +26,92 @@ msgstr ""
 msgid "No personas found for that population. Generate a new one instead."
 msgstr ""
 
+msgid "Sointu — Select reviewers"
+msgstr "Sointu — Valitse arvioijat"
+
+msgid "Select or generate reviewers"
+msgstr "Valitse tai luo arvioijia"
+
+msgid "Choose existing population"
+msgstr "Valitse olemassa oleva joukko"
+
+msgid "Use selected population"
+msgstr "Käytä valittua joukkoa"
+
+msgid "Or generate a new population"
+msgstr "Tai luo uusi joukko"
+
+msgid "Population name"
+msgstr "Joukon nimi"
+
+msgid "Location"
+msgstr "Sijainti"
+
+msgid "Size"
+msgstr "Koko"
+
+msgid "Generate"
+msgstr "Luo"
+
+msgid "We’ll generate realistic personas using your OpenAI key. If a database is configured, we’ll store them."
+msgstr "Luomme realistisia persoonia OpenAI-avaintasi käyttäen. Jos tietokanta on käytössä, tallennamme ne."
+
+msgid "Submit your media content"
+msgstr "Lähetä mediasisältösi"
+
+msgid "Title (optional)"
+msgstr "Otsikko (valinnainen)"
+
+msgid "Content (text)"
+msgstr "Sisältö (teksti)"
+
+msgid "Send to reviewers"
+msgstr "Lähetä arvioitavaksi"
+
+msgid "Simulated reviewer chat"
+msgstr "Simuloitu arvioijakeskustelu"
+
+msgid "Compare with news"
+msgstr "Vertaa uutisiin"
+
+msgid "News comparison"
+msgstr "Uutisvertailu"
+
+msgid "Top matches"
+msgstr "Parhaat osumat"
+
+msgid "Read"
+msgstr "Lue"
+
+msgid "Suggestions"
+msgstr "Ehdotukset"
+
+msgid "See rating & suggestions"
+msgstr "Näytä arvio ja ehdotukset"
+
+msgid "Final rating & suggestions"
+msgstr "Lopullinen arvio ja ehdotukset"
+
+msgid "Average reviewer score:"
+msgstr "Arvioijien keskiarvo:"
+
+msgid "Review summary:"
+msgstr "Yhteenveto kommenteista:"
+
+msgid "News-based suggestions:"
+msgstr "Uutisiin perustuvat ehdotukset:"
+
+msgid "Start over"
+msgstr "Aloita alusta"
+
+msgid "Please choose a population or generate a new one."
+msgstr "Valitse joukko tai luo uusi."
+
+msgid "No personas found for that population. Generate a new one instead."
+msgstr "Tälle joukolle ei löytynyt persoonia. Luo uusi joukko."
+
+msgid "Generated %(count)s personas for population '%(name)s'."
+msgstr "Luotiin %(count)s persoonaa joukolle '%(name)s'."
+
+msgid "(suggestions temporarily unavailable)"
+msgstr "(ehdotukset eivät juuri nyt ole saatavilla)"
