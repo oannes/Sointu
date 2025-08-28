@@ -86,11 +86,12 @@ from models.db_utils import get_personas_by_population, save_persona_to_db, setu
 from models.feedback import calculate_nps
 from models import main as news_main
 
-
-try:
-    setup_database()
-except Exception as e:
-    print("DB setup skipped / failed:", e)
+# Optional: initialize DB structure if DATABASE_URL is present
+if os.getenv("DATABASE_URL"):
+    try:
+        setup_database()
+    except Exception as e:
+        print("DB setup skipped / failed:", e)
 
 # Helper: extract first integer 0..10 from text
 def extract_score(text):
@@ -101,7 +102,7 @@ def extract_score(text):
 def index():
     # Try to read existing populations from DB, else fallback empty
     existing = {}
-     try:
+    try:
         from models.db_utils import get_personas_by_population, get_all_populations
         existing = get_personas_by_population() or {}
         pops = get_all_populations()  # jos näytät listaa
