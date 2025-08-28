@@ -176,23 +176,6 @@ def generate_population():
     flash(_t("Generated %(n)d personas for population '%(name)s'.", n=len(personas), name=name))
     return redirect(url_for("submit_content"))
 
-@app.get("/submit")
-def submit_content():
-    if 'run_id' not in session:
-        return redirect(url_for("index"))
-    return render_template("submit.html")
-
-@app.post("/submit")
-def submit_content_post():
-    if 'run_id' not in session:
-        return redirect(url_for("index"))
-    content = (request.form.get("content") or "").strip()
-    title = (request.form.get("title") or "").strip()
-    if not content:
-        flash(_t("Please paste your content text."))
-        return redirect(url_for("submit_content"))
-    update_run_content(session['run_id'], content, title=title)
-    return redirect(url_for("chat"))
 
 def find_population_id_by_name(name: str) -> int | None:
     rows = get_all_populations()
