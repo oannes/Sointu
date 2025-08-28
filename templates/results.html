@@ -1,16 +1,16 @@
 
 {% extends "base.html" %}
 {% block content %}
-<h1>Final rating & suggestions</h1>
+<h1>_("Final rating & suggestions)"</h1>
 <div class="card">
-  <p><strong>Average reviewer score:</strong> {{ avg_score if avg_score is not none else "n/a" }}</p>
-  <p><strong>Review summary:</strong></p>
+  <p><strong>_("Average reviewer score:")</strong> {{ avg_score if avg_score is not none else "n/a" }}</p>
+  <p><strong>_("Review summary:")</strong></p>
   <div style="white-space:pre-wrap">{{ summary }}</div>
   <hr>
-  <p><strong>News-based suggestions:</strong></p>
+  <p><strong>_("News-based suggestions:")</strong></p>
   <div style="white-space:pre-wrap">{{ suggestions }}</div>
   <div class="actions">
-    <a class="btn" href="{{ url_for('index') }}">Start over</a>
+    <a class="btn" href="{{ url_for('index') }}">_("Start over")</a>
   </div>
 </div>
 {% endblock %}

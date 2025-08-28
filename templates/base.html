@@ -9,8 +9,13 @@
   </head>
   <body>
     <header>
-      <strong>Sointu</strong> — simulated audiences & news-aware feedback
+      <strong>Sointu</strong>
+      <nav style="float:right; display:flex; gap:10px;">
+      <a href="{{ url_for('set_lang', code='fi') }}">FI</a>
+      <a href="{{ url_for('set_lang', code='en') }}">EN</a>
+    </nav>
     </header>
+    
     <main>
       {% with messages = get_flashed_messages() %}
         {% if messages %}

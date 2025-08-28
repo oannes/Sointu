@@ -3,12 +3,30 @@ import os, re, json
 from flask import Flask, request, render_template, redirect, url_for, session, flash
 from dotenv import load_dotenv
 from openai import OpenAI
+from flask_babel import get_locale, Babel, _
 
 load_dotenv()
 
 # Flask setup
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
+app.config['BABEL_DEFAULT_LOCALE'] = 'fi'
+app.config['BABEL_SUPPORTED_LOCALES'] = ['fi', 'en']
+
+babel = Babel(app)
+
+@babel.localeselector
+def get_locale():
+    # Priority: explicit session choice -> ?lang= -> browser Accept-Language -> default
+    from flask import request
+    lang = session.get('lang')
+    if not lang:
+        lang = request.args.get('lang')
+        if lang:
+            session['lang'] = lang
+    if lang in app.config['BABEL_SUPPORTED_LOCALES']:
+        return lang
+    return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LOCALES'])
 
 # Imports from your provided modules (now in models/)
 from models.generateParticipants import generate_role, get_age_attributes, get_gender_attributes
@@ -52,7 +70,7 @@ def select_reviewers():
     ensure_state()
     pop = request.form.get("population_name") or ""
     if not pop:
-        flash("Please choose a population or generate a new one.")
+        flash(_("Please choose a population or generate a new one."))
         return redirect(url_for("index"))
     # Load persons from DB
     try:
@@ -61,7 +79,7 @@ def select_reviewers():
     except Exception as e:
         persons = []
     if not persons:
-        flash("No personas found for that population. Generate a new one instead.")
+        flash(_("No personas found for that population. Generate a new one instead."))
         return redirect(url_for("index"))
     session["population_name"] = pop
     session["reviewers"] = persons
@@ -95,7 +113,7 @@ def generate_population():
 
     session["population_name"] = name
     session["reviewers"] = reviewers
-    flash(f"Generated {len(reviewers)} personas for population '{name}'.")
+    flash(_(f"Generated {len(reviewers)} personas for population '{name}'."))
     return redirect(url_for("submit_content"))
 
 @app.get("/submit")
@@ -103,13 +121,19 @@ def submit_content():
     ensure_state()
     return render_template("submit.html", title="Submit content")
 
+@app.get("/lang/<code>")
+def set_lang(code):
+    if code in app.config['BABEL_SUPPORTED_LOCALES']:
+        session['lang'] = code
+    return redirect(request.referrer or url_for("index"))
+
 @app.post("/submit")
 def submit_content_post():
     ensure_state()
     session["user_content"] = (request.form.get("content") or "").strip()
     session["user_title"] = (request.form.get("title") or "").strip()
     if not session["user_content"]:
-        flash("Please paste your content text.")
+        flash(_()"Please paste your content text."))
         return redirect(url_for("submit_content"))
     return redirect(url_for("chat"))
 
@@ -124,11 +148,18 @@ def persona_to_identity(role: dict) -> str:
     return "You are a persona reviewer. " + "; ".join(parts)
 
 def reviewer_comment(client: OpenAI, role: dict, content: str) -> tuple[str,int|None]:
-    identity = persona_to_identity(role)
-    prompt = (
-        "Read the user's content below and write ONE short paragraph as this persona reacting to it. "
-        "If appropriate, include a single numeric score 0-10 for how convincing it is, in the text.\n\nUSER CONTENT:\n" + content
-    )
+    locale = str(get_locale()) or 'fi'
+    if locale.startswith('fi'):
+        identity = "Olet personoitu arvioija. " + persona_to_identity(role)
+        prompt = ("Lue käyttäjän sisältö ja kirjoita YKSI lyhyt kappale... "
+                  "Jos sopii, sisällytä yksi numeerinen pisteytys 0–10.\n\n"
+                  "KÄYTTÄJÄN SISÄLTÖ:\n" + content)
+    else:
+        identity = persona_to_identity(role)
+        prompt = (
+            "Read the user's content below and write ONE short paragraph as this persona reacting to it. "
+            "If appropriate, include a single numeric score 0-10 for how convincing it is, in the text.\n\nUSER CONTENT:\n" + content
+        )
     try:
         resp = client.chat.completions.create(
             model=os.getenv("OPENAI_MODEL","gpt-4o-mini"),
@@ -164,7 +195,11 @@ def chat():
 def fetch_news_articles(query: str, max_items: int = 5):
     try:
         from gnews import GNews
-        g = GNews(language="en", max_results=max_items)
+        locale = str(get_locale()) or 'fi'
+        if locale.startswith('fi'):
+            g = GNews(language="fi", country="FI", max_results=max_items)
+        else:
+            g = GNews(language="en", country="US", max_results=max_items)
         results = g.get_news(query)
         arts = []
         for it in results or []:
@@ -180,17 +215,28 @@ def fetch_news_articles(query: str, max_items: int = 5):
         return []
 
 def suggestions_from_news(user_text: str, articles: list[dict]) -> str:
+    locale = str(get_locale()) or 'fi'
     # Use your provided main.generate_gpt_response to create suggestions
-    identity = "You are a communications strategist who reads recent news and suggests how to improve a message."
-    summarized = "\n".join([f"- {a['title']} ({a['publisher']})" for a in articles[:5]])
-    prompt = (
-        "Here is the user's message:\n"
-        f"{user_text}\n\n"
-        "Here are recent related headlines:\n"
-        f"{summarized or 'None'}\n\n"
-        "Give 3–5 concrete suggestions to better align (or intentionally contrast) the message with the news cycle. "
-        "Return plain text bullets."
-    )
+    if locale.startswith('fi'):
+        identity = "Olet viestintästrategi, joka lukee tuoreita uutisia..."
+        prompt = (
+          "Tässä käyttäjän viesti:\n"
+          f"{user_text}\n\n"
+          "Tässä tuoreita aiheeseen liittyviä otsikoita:\n"
+          + "\n".join([f"- {a['title']} ({a['publisher']})" for a in articles[:5]]) +
+          "\n\nAnna 3–5 konkreettista ehdotusta..."
+        )
+    else:
+        identity = "You are a communications strategist who reads recent news and suggests how to improve a message."
+        summarized = "\n".join([f"- {a['title']} ({a['publisher']})" for a in articles[:5]])
+        prompt = (
+            "Here is the user's message:\n"
+            f"{user_text}\n\n"
+            "Here are recent related headlines:\n"
+            f"{summarized or 'None'}\n\n"
+            "Give 3–5 concrete suggestions to better align (or intentionally contrast) the message with the news cycle. "
+            "Return plain text bullets."
+        )
     try:
         txt = news_main.generate_gpt_response(identity, prompt, os.getenv("OPENAI_MODEL","gpt-4o-mini"))
         if hasattr(txt, "choices"):

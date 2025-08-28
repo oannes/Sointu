@@ -1,7 +1,7 @@
 
 {% extends "base.html" %}
 {% block content %}
-<h1>Simulated reviewer chat</h1>
+<h1>_("Simulated reviewer chat")</h1>
 <div class="card">
   {% for m in chat %}
     <div>
@@ -12,7 +12,7 @@
     <hr>
   {% endfor %}
   <div class="actions">
-    <a class="btn" href="{{ url_for('compare_news') }}">Compare with news</a>
+    <a class="btn" href="{{ url_for('compare_news') }}">_("Compare with news")</a>
   </div>
 </div>
 {% endblock %}

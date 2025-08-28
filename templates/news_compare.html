@@ -1,7 +1,7 @@
 
 {% extends "base.html" %}
 {% block content %}
-<h1>News comparison</h1>
+<h1>_("News comparison")</h1>
 <div class="card">
   <h3>Top matches</h3>
   <div class="list">
@@ -14,10 +14,10 @@
       <hr>
     {% endfor %}
   </div>
-  <h3>Suggestions</h3>
+  <h3>_("Suggestions")</h3>
   <div style="white-space:pre-wrap">{{ suggestions }}</div>
   <div class="actions">
-    <a class="btn" href="{{ url_for('results') }}">See rating & suggestions</a>
+    <a class="btn" href="{{ url_for('results') }}">_("See rating & suggestions")</a>
   </div>
 </div>
 {% endblock %}
