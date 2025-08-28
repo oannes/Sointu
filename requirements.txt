@@ -6,6 +6,7 @@ gnews
 feedparser
 psycopg2-binary
 Flask-Babel
+Flask-SQLAlchemy>=3.1
 
 numpy
 pydantic
