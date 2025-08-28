@@ -133,7 +133,7 @@ def submit_content_post():
     session["user_content"] = (request.form.get("content") or "").strip()
     session["user_title"] = (request.form.get("title") or "").strip()
     if not session["user_content"]:
-        flash(_()"Please paste your content text."))
+        flash(_("Please paste your content text."))
         return redirect(url_for("submit_content"))
     return redirect(url_for("chat"))
 
