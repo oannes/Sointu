@@ -1,0 +1,18 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h1>Simulated reviewer chat</h1>
+<div class="card">
+  {% for m in chat %}
+    <div>
+      <span class="badge">{{ m.name }}</span>
+      <div style="margin-top:6px">{{ m.text }}</div>
+      {% if m.score is not none %}<small>Score: {{ m.score }}/10</small>{% endif %}
+    </div>
+    <hr>
+  {% endfor %}
+  <div class="actions">
+    <a class="btn" href="{{ url_for('compare_news') }}">Compare with news</a>
+  </div>
+</div>
+{% endblock %}

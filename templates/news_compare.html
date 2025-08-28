@@ -1,0 +1,23 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h1>News comparison</h1>
+<div class="card">
+  <h3>Top matches</h3>
+  <div class="list">
+    {% for a in articles %}
+      <div>
+        <div><strong>{{ a['title'] }}</strong></div>
+        <small>{{ a['publisher'] }} — {{ a['published'] }}</small>
+        {% if a['url'] %}<div><a href="{{ a['url'] }}" target="_blank" class="btn secondary">Read</a></div>{% endif %}
+      </div>
+      <hr>
+    {% endfor %}
+  </div>
+  <h3>Suggestions</h3>
+  <div style="white-space:pre-wrap">{{ suggestions }}</div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('results') }}">See rating & suggestions</a>
+  </div>
+</div>
+{% endblock %}

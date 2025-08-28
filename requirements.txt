@@ -1,2 +1,7 @@
-Flask==3.0.3
-gunicorn==22.0.0
+flask
+gunicorn
+python-dotenv
+openai
+gnews
+feedparser
+psycopg2-binary

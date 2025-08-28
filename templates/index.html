@@ -1,0 +1,43 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h1>Select or generate reviewers</h1>
+<div class="card">
+  <form method="post" action="{{ url_for('select_reviewers') }}">
+    <label>Choose existing population</label>
+    <select name="population_name">
+      <option value="">— none —</option>
+      {% for pop in existing_populations %}
+      <option value="{{ pop }}">{{ pop }} ({{ existing_populations[pop]|length }} personas)</option>
+      {% endfor %}
+    </select>
+    <div class="actions">
+      <button type="submit">Use selected population</button>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('generate_population') }}">
+    <label>Or generate a new population</label>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label>Population name</label>
+        <input type="text" name="new_population" placeholder="e.g., Finnish adults">
+      </div>
+      <div>
+        <label>Location</label>
+        <input type="text" name="location" placeholder="e.g., Helsinki">
+      </div>
+      <div>
+        <label>Size</label>
+        <input type="text" name="size" value="5">
+      </div>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn">Generate</button>
+    </div>
+    <small>We’ll generate realistic personas using your OpenAI key. If a database is configured, we’ll store them.</small>
+  </form>
+</div>
+{% endblock %}
