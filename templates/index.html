@@ -1,10 +1,10 @@
 
 {% extends "base.html" %}
 {% block content %}
-<h1>_("Select or generate reviewers")</h1>
+<h1>{{ _("Select or generate reviewers") }}</h1>
 <div class="card">
   <form method="post" action="{{ url_for('select_reviewers') }}">
-    <label>_("Choose existing population")</label>
+    <label>{{ _("Choose existing population") }}</label>
     <select name="population_name">
       <option value="">— none —</option>
       {% for pop in existing_populations %}
@@ -12,32 +12,32 @@
       {% endfor %}
     </select>
     <div class="actions">
-      <button type="submit">_("Use selected population")</button>
+      <button type="submit">{{ _("Use selected population") }}</button>
     </div>
   </form>
 </div>
 
 <div class="card">
   <form method="post" action="{{ url_for('generate_population') }}">
-    <label>_("Or generate a new population")</label>
+    <label>{{ _("Or generate a new population") }}</label>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div>
-        <label>_("Population name")</label>
+        <label>{{ _("Population name") }}</label>
         <input type="text" name="new_population" placeholder="e.g., Finnish adults">
       </div>
       <div>
-        <label>_("Location")</label>
+        <label>{{ _("Location") }}</label>
         <input type="text" name="location" placeholder="e.g., Helsinki">
       </div>
       <div>
-        <label>Size</label>
+        <label>{{ _("Size") }}</label>
         <input type="text" name="size" value="5">
       </div>
     </div>
     <div class="actions">
-      <button type="submit" class="btn">_("Generate")</button>
+      <button type="submit" class="btn">{{ _("Generate") }}</button>
     </div>
-    <small>_("We’ll generate realistic personas and simulate large panels with remarkable accuracy.")</small>
+    <small>{{ _("We’ll generate realistic personas and simulate large panels with remarkable accuracy.") }}</small>
   </form>
 </div>
 {% endblock %}

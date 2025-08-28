@@ -102,5 +102,8 @@ msgstr "Tähän porukkaan ei löytynyt yhtään tyyppiä. Kokeile luoda uusi por
 msgid "Generated %(count)s personas for population '%(name)s'."
 msgstr "Luotiin %(count)s tyyppiä porukalle ”%(name)s”."
 
+msgid "We’ll generate realistic personas and simulate large panels with remarkable accuracy."
+msgstr "Perustuu oikeista ihmisistä tehtyihin simulaatioihin"
+
 msgid "(suggestions temporarily unavailable)"
 msgstr "(ehdotukset eivät ole juuri nyt saatavilla)"

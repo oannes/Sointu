@@ -1,15 +1,15 @@
 
 {% extends "base.html" %}
 {% block content %}
-<h1>_("Submit your media content")</h1>
+<h1>{{ _("Submit your media content") }}</h1>
 <div class="card">
   <form method="post" action="{{ url_for('submit_content') }}">
-    <label>Title (optional)</label>
+    <label>{{ _("Title (optional)") }}</label>
     <input type="text" name="title" placeholder="Headline or description">
-    <label>_("Content (text)")</label>
+    <label>{{ _("Content (text)") }}</label>
     <textarea name="content" placeholder="Paste your statement, script, or caption...">{{ session.get('user_content','') }}</textarea>
     <div class="actions">
-      <button type="submit">_("Send to reviewers")</button>
+      <button type="submit">{{ _("Send to reviewers") }}</button>
     </div>
   </form>
 </div>
