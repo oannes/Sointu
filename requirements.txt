@@ -5,6 +5,7 @@ openai
 gnews
 feedparser
 psycopg2-binary
+Flask-Babel
 
 numpy
 pydantic
