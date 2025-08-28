@@ -86,12 +86,11 @@ from models.db_utils import get_personas_by_population, save_persona_to_db, setu
 from models.feedback import calculate_nps
 from models import main as news_main
 
-# Optional: initialize DB structure if DATABASE_URL is present
-if os.getenv("DATABASE_URL"):
-    try:
-        setup_database()
-    except Exception as e:
-        print("DB setup skipped / failed:", e)
+
+try:
+    setup_database()
+except Exception as e:
+    print("DB setup skipped / failed:", e)
 
 # Helper: extract first integer 0..10 from text
 def extract_score(text):
