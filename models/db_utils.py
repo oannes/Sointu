@@ -4,7 +4,7 @@ import os
 import psycopg2
 from dotenv import load_dotenv
 from contextlib import contextmanager
-from generateParticipants import Persona
+from .generateParticipants import Persona
 import json
 
 # Load environment variables

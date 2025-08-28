@@ -1,5 +1,5 @@
 #feedback.py
-from db_utils import get_personas_by_population
+from .db_utils import get_personas_by_population
 from openai import OpenAI
 import os
 import sys

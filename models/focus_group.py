@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 import random
 import os
-from db_utils import get_personas_by_population
+from .db_utils import get_personas_by_population
 from openai import OpenAI
 from dotenv import load_dotenv
 
