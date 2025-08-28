@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-08-28 21:20+0300\n"
+"POT-Creation-Date: 2025-08-28 21:53+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,11 +17,85 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-#: app.py:73
+#: app.py:81
 msgid "Please choose a population or generate a new one."
 msgstr ""
 
-#: app.py:82
+#: app.py:90
 msgid "No personas found for that population. Generate a new one instead."
+msgstr ""
+
+#: app.py:138
+msgid "Please paste your content text."
+msgstr ""
+
+#: templates/chat.html:4
+msgid "Simulated reviewer chat"
+msgstr ""
+
+#: templates/index.html:4
+msgid "Select or generate reviewers"
+msgstr ""
+
+#: templates/index.html:7
+msgid "Choose existing population"
+msgstr ""
+
+#: templates/index.html:15
+msgid "Use selected population"
+msgstr ""
+
+#: templates/index.html:22
+msgid "Or generate a new population"
+msgstr ""
+
+#: templates/index.html:25
+msgid "Population name"
+msgstr ""
+
+#: templates/index.html:29
+msgid "Location"
+msgstr ""
+
+#: templates/index.html:33
+msgid "Size"
+msgstr ""
+
+#: templates/index.html:38
+msgid "Generate"
+msgstr ""
+
+#: templates/index.html:40
+msgid ""
+"We’ll generate realistic personas and simulate large panels with "
+"remarkable accuracy."
+msgstr ""
+
+#: templates/news_compare.html:4
+msgid "News comparison"
+msgstr ""
+
+#: templates/news_compare.html:17
+msgid "Suggestions"
+msgstr ""
+
+#: templates/news_compare.html:20
+msgid "See rating & suggestions"
+msgstr ""
+
+#: templates/submit.html:4
+msgid "Submit your media content"
+msgstr ""
+
+#: templates/submit.html:7
+msgid "Title (optional)"
+msgstr ""
+
+#: templates/submit.html:9
+msgid "Content (text)"
+msgstr ""
+
+#: templates/submit.html:12
+msgid "Send to reviewers"
 msgstr ""
 

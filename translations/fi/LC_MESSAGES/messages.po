@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-08-28 21:20+0300\n"
+"POT-Creation-Date: 2025-08-28 21:53+0300\n"
 "PO-Revision-Date: 2025-08-28 21:21+0300\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fi\n"
@@ -18,92 +18,118 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-msgid "Sointu — Select reviewers"
-msgstr "Sointu — Valitse tyypit"
-
-msgid "Select or generate reviewers"
-msgstr "Valitse tyypit tai luo uudet"
-
-msgid "Choose existing population"
-msgstr "Valitse valmis porukka"
-
-msgid "Use selected population"
-msgstr "Käytä tätä porukkaa"
-
-msgid "Or generate a new population"
-msgstr "Tai tee kokonaan uusi porukka"
-
-msgid "Population name"
-msgstr "Porukan nimi"
-
-msgid "Location"
-msgstr "Sijainti"
-
-msgid "Size"
-msgstr "Koko"
-
-msgid "Generate"
-msgstr "Luo porukka"
-
-msgid "Submit your media content"
-msgstr "Kerro mistä sisällöstä haluat kuulla koko porukan mielipiteen"
-
-msgid "Title (optional)"
-msgstr "Otsikko (vapaaehtoinen)"
-
-msgid "Content (text)"
-msgstr "Sisältö (tekstiä)"
-
-msgid "Send to reviewers"
-msgstr "Lähetä tyypeille arvioitavaksi"
-
-msgid "Simulated reviewer chat"
-msgstr "Keskustele tyyppien kanssa"
-
-msgid "Compare with news"
-msgstr "Vertaa puheenaiheisiin"
-
-msgid "News comparison"
-msgstr "Vertailu puheenaiheisiin"
-
-msgid "Top matches"
-msgstr "Parhaat osumat"
-
-msgid "Read"
-msgstr "Lue"
-
-msgid "Suggestions"
-msgstr "Ehdotuksia"
-
-msgid "See rating & suggestions"
-msgstr "Vilkaise mielipiteet"
-
-msgid "Final rating & suggestions"
-msgstr "Näin porukka arvioi"
-
-msgid "Average reviewer score:"
-msgstr "Tyyppien keskiarvo:"
-
-msgid "Review summary:"
-msgstr "Yhteenveto arvioista:"
-
-msgid "News-based suggestions:"
-msgstr "Puheenaiheisiin perustuvia ehdotuksia:"
-
-msgid "Start over"
-msgstr "Aloita alusta"
-
+#: app.py:81
 msgid "Please choose a population or generate a new one."
 msgstr "Valitse olemassaoleva tai uusi porukka."
 
+#: app.py:90
 msgid "No personas found for that population. Generate a new one instead."
 msgstr "Tähän porukkaan ei löytynyt yhtään tyyppiä. Kokeile luoda uusi porukka."
 
-msgid "Generated %(count)s personas for population '%(name)s'."
-msgstr "Luotiin %(count)s tyyppiä porukalle ”%(name)s”."
+#: app.py:138
+msgid "Please paste your content text."
+msgstr ""
 
-msgid "We’ll generate realistic personas and simulate large panels with remarkable accuracy."
+#: templates/chat.html:4
+msgid "Simulated reviewer chat"
+msgstr "Keskustele tyyppien kanssa"
+
+#: templates/index.html:4
+msgid "Select or generate reviewers"
+msgstr "Valitse tyypit tai luo uudet"
+
+#: templates/index.html:7
+msgid "Choose existing population"
+msgstr "Valitse valmis porukka"
+
+#: templates/index.html:15
+msgid "Use selected population"
+msgstr "Käytä tätä porukkaa"
+
+#: templates/index.html:22
+msgid "Or generate a new population"
+msgstr "Tai tee kokonaan uusi porukka"
+
+#: templates/index.html:25
+msgid "Population name"
+msgstr "Porukan nimi"
+
+#: templates/index.html:29
+msgid "Location"
+msgstr "Sijainti"
+
+#: templates/index.html:33
+msgid "Size"
+msgstr "Koko"
+
+#: templates/index.html:38
+msgid "Generate"
+msgstr "Luo porukka"
+
+#: templates/index.html:40
+msgid ""
+"We’ll generate realistic personas and simulate large panels with "
+"remarkable accuracy."
 msgstr "Perustuu oikeista ihmisistä tehtyihin simulaatioihin"
 
-msgid "(suggestions temporarily unavailable)"
-msgstr "(ehdotukset eivät ole juuri nyt saatavilla)"
+#: templates/news_compare.html:4
+msgid "News comparison"
+msgstr "Vertailu puheenaiheisiin"
+
+#: templates/news_compare.html:17
+msgid "Suggestions"
+msgstr "Ehdotuksia"
+
+#: templates/news_compare.html:20
+msgid "See rating & suggestions"
+msgstr "Vilkaise mielipiteet"
+
+#: templates/submit.html:4
+msgid "Submit your media content"
+msgstr "Kerro mistä sisällöstä haluat kuulla koko porukan mielipiteen"
+
+#: templates/submit.html:7
+msgid "Title (optional)"
+msgstr "Otsikko (vapaaehtoinen)"
+
+#: templates/submit.html:9
+msgid "Content (text)"
+msgstr "Sisältö (tekstiä)"
+
+#: templates/submit.html:12
+msgid "Send to reviewers"
+msgstr "Lähetä tyypeille arvioitavaksi"
+
+#~ msgid "Sointu — Select reviewers"
+#~ msgstr "Sointu — Valitse tyypit"
+
+#~ msgid "Compare with news"
+#~ msgstr "Vertaa puheenaiheisiin"
+
+#~ msgid "Top matches"
+#~ msgstr "Parhaat osumat"
+
+#~ msgid "Read"
+#~ msgstr "Lue"
+
+#~ msgid "Final rating & suggestions"
+#~ msgstr "Näin porukka arvioi"
+
+#~ msgid "Average reviewer score:"
+#~ msgstr "Tyyppien keskiarvo:"
+
+#~ msgid "Review summary:"
+#~ msgstr "Yhteenveto arvioista:"
+
+#~ msgid "News-based suggestions:"
+#~ msgstr "Puheenaiheisiin perustuvia ehdotuksia:"
+
+#~ msgid "Start over"
+#~ msgstr "Aloita alusta"
+
+#~ msgid "Generated %(count)s personas for population '%(name)s'."
+#~ msgstr "Luotiin %(count)s tyyppiä porukalle ”%(name)s”."
+
+#~ msgid "(suggestions temporarily unavailable)"
+#~ msgstr "(ehdotukset eivät ole juuri nyt saatavilla)"
+
