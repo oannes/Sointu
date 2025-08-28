@@ -402,3 +402,9 @@ def save_news_analysis(run_id: str, result_json: dict):
         s.add(na)
         s.flush()
         return na.id
+        
+def get_run_content(run_id: str):
+    """Palauta runin sisältötekstin (ja halutessa otsikon)."""
+    with get_session() as s:
+        run = s.get(Run, run_id)
+        return run.content_text if run else ""
