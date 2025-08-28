@@ -4,11 +4,25 @@ from flask import Flask, request, render_template, redirect, url_for, session, f
 from dotenv import load_dotenv
 from openai import OpenAI
 from flask_babel import get_locale, Babel, _
+from flask_sqlalchemy import SQLAlchemy
 
 load_dotenv()
 
 # Flask setup
 app = Flask(__name__)
+
+
+# Luo ja normalisoi DATABASE_URL ENNEN kuin asetat sen app.configiin
+DATABASE_URL = os.environ.get("DATABASE_URL", "")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL ei ole asetettu Herokussa.")
+
+# Heroku antaa usein postgres://, SQLAlchemy vaatii postgresql+psycopg2://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+
+# Jos käytät Flask-SQLAlchemyä:
+
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
 app.config['BABEL_DEFAULT_LOCALE'] = 'fi'
 app.config['BABEL_SUPPORTED_LOCALES'] = ['fi', 'en']
