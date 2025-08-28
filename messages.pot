@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-08-28 21:53+0300\n"
+"POT-Creation-Date: 2025-08-28 22:09+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -29,6 +29,10 @@ msgstr ""
 msgid "Please paste your content text."
 msgstr ""
 
+#: templates/base.html:12
+msgid "Pilot the resonance of your message"
+msgstr ""
+
 #: templates/chat.html:4
 msgid "Simulated reviewer chat"
 msgstr ""
@@ -39,6 +43,10 @@ msgstr ""
 
 #: templates/index.html:7
 msgid "Choose existing population"
+msgstr ""
+
+#: templates/index.html:9
+msgid "— none —"
 msgstr ""
 
 #: templates/index.html:15

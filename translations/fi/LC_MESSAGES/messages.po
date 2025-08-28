@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-08-28 22:02+0300\n"
+"POT-Creation-Date: 2025-08-28 22:09+0300\n"
 "PO-Revision-Date: 2025-08-28 21:21+0300\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fi\n"
@@ -29,6 +29,10 @@ msgstr "Tähän porukkaan ei löytynyt yhtään tyyppiä. Kokeile luoda uusi por
 #: app.py:138
 msgid "Please paste your content text."
 msgstr ""
+
+#: templates/base.html:12
+msgid "Pilot the resonance of your message"
+msgstr "Testaa etukäteen miten juttusi resonoi kuulijoissa"
 
 #: templates/chat.html:4
 msgid "Simulated reviewer chat"
