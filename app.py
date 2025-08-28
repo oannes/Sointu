@@ -15,18 +15,26 @@ app.config['BABEL_SUPPORTED_LOCALES'] = ['fi', 'en']
 
 babel = Babel(app)
 
-@babel.localeselector
-def get_locale():
-    # Priority: explicit session choice -> ?lang= -> browser Accept-Language -> default
-    from flask import request
-    lang = session.get('lang')
-    if not lang:
-        lang = request.args.get('lang')
-        if lang:
-            session['lang'] = lang
+def select_locale():
+    from flask import request, session
+    # session -> ?lang= -> Accept-Language -> default
+    if 'lang' in session and session['lang'] in app.config['BABEL_SUPPORTED_LOCALES']:
+        return session['lang']
+    lang = request.args.get('lang')
     if lang in app.config['BABEL_SUPPORTED_LOCALES']:
+        session['lang'] = lang
         return lang
-    return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LOCALES'])
+    return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LOCALES']) or app.config['BABEL_DEFAULT_LOCALE']
+
+# NEW v4 API: pass selector to constructor
+babel = Babel(app, locale_selector=select_locale)
+
+@app.get("/lang/<code>")
+def set_lang(code):
+    from flask import redirect, request, session, url_for
+    if code in app.config['BABEL_SUPPORTED_LOCALES']:
+        session['lang'] = code
+    return redirect(request.referrer or url_for("index"))
 
 # Imports from your provided modules (now in models/)
 from models.generateParticipants import generate_role, get_age_attributes, get_gender_attributes
