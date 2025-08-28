@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2025-08-28 21:53+0300\n"
+"POT-Creation-Date: 2025-08-28 22:02+0300\n"
 "PO-Revision-Date: 2025-08-28 21:21+0300\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: fi\n"
@@ -20,7 +20,7 @@ msgstr ""
 
 #: app.py:81
 msgid "Please choose a population or generate a new one."
-msgstr "Valitse olemassaoleva tai uusi porukka."
+msgstr "Kenen näkökulmia sisältöösi haluat kuulla?"
 
 #: app.py:90
 msgid "No personas found for that population. Generate a new one instead."
@@ -41,6 +41,10 @@ msgstr "Valitse tyypit tai luo uudet"
 #: templates/index.html:7
 msgid "Choose existing population"
 msgstr "Valitse valmis porukka"
+
+#: templates/index.html:9
+msgid "— none —"
+msgstr "– yksikään valmis porukka ei kelpaa –"
 
 #: templates/index.html:15
 msgid "Use selected population"
