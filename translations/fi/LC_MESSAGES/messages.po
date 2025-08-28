@@ -36,7 +36,7 @@ msgstr "Keskustele tyyppien kanssa"
 
 #: templates/index.html:4
 msgid "Select or generate reviewers"
-msgstr "Valitse tyypit tai luo uudet"
+msgstr "Minkä porukan mielipiteitä sisällöstäsi haluat kuunnella?"
 
 #: templates/index.html:7
 msgid "Choose existing population"
