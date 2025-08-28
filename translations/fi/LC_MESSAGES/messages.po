@@ -18,31 +18,23 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.17.0\n"
 
-#: app.py:73
-msgid "Please choose a population or generate a new one."
-msgstr ""
-
-#: app.py:82
-msgid "No personas found for that population. Generate a new one instead."
-msgstr ""
-
 msgid "Sointu — Select reviewers"
-msgstr "Sointu — Valitse arvioijat"
+msgstr "Sointu — Valitse tyypit"
 
 msgid "Select or generate reviewers"
-msgstr "Valitse tai luo arvioijia"
+msgstr "Valitse tyypit tai luo uudet"
 
 msgid "Choose existing population"
-msgstr "Valitse olemassa oleva joukko"
+msgstr "Valitse valmis porukka"
 
 msgid "Use selected population"
-msgstr "Käytä valittua joukkoa"
+msgstr "Käytä tätä porukkaa"
 
 msgid "Or generate a new population"
-msgstr "Tai luo uusi joukko"
+msgstr "Tai tee kokonaan uusi porukka"
 
 msgid "Population name"
-msgstr "Joukon nimi"
+msgstr "Porukan nimi"
 
 msgid "Location"
 msgstr "Sijainti"
@@ -51,31 +43,28 @@ msgid "Size"
 msgstr "Koko"
 
 msgid "Generate"
-msgstr "Luo"
-
-msgid "We’ll generate realistic personas using your OpenAI key. If a database is configured, we’ll store them."
-msgstr "Luomme realistisia persoonia OpenAI-avaintasi käyttäen. Jos tietokanta on käytössä, tallennamme ne."
+msgstr "Luo porukka"
 
 msgid "Submit your media content"
-msgstr "Lähetä mediasisältösi"
+msgstr "Kerro mistä sisällöstä haluat kuulla koko porukan mielipiteen"
 
 msgid "Title (optional)"
-msgstr "Otsikko (valinnainen)"
+msgstr "Otsikko (vapaaehtoinen)"
 
 msgid "Content (text)"
-msgstr "Sisältö (teksti)"
+msgstr "Sisältö (tekstiä)"
 
 msgid "Send to reviewers"
-msgstr "Lähetä arvioitavaksi"
+msgstr "Lähetä tyypeille arvioitavaksi"
 
 msgid "Simulated reviewer chat"
-msgstr "Simuloitu arvioijakeskustelu"
+msgstr "Keskustele tyyppien kanssa"
 
 msgid "Compare with news"
-msgstr "Vertaa uutisiin"
+msgstr "Vertaa puheenaiheisiin"
 
 msgid "News comparison"
-msgstr "Uutisvertailu"
+msgstr "Vertailu puheenaiheisiin"
 
 msgid "Top matches"
 msgstr "Parhaat osumat"
@@ -84,34 +73,34 @@ msgid "Read"
 msgstr "Lue"
 
 msgid "Suggestions"
-msgstr "Ehdotukset"
+msgstr "Ehdotuksia"
 
 msgid "See rating & suggestions"
-msgstr "Näytä arvio ja ehdotukset"
+msgstr "Vilkaise mielipiteet"
 
 msgid "Final rating & suggestions"
-msgstr "Lopullinen arvio ja ehdotukset"
+msgstr "Näin porukka arvioi"
 
 msgid "Average reviewer score:"
-msgstr "Arvioijien keskiarvo:"
+msgstr "Tyyppien keskiarvo:"
 
 msgid "Review summary:"
-msgstr "Yhteenveto kommenteista:"
+msgstr "Yhteenveto arvioista:"
 
 msgid "News-based suggestions:"
-msgstr "Uutisiin perustuvat ehdotukset:"
+msgstr "Puheenaiheisiin perustuvia ehdotuksia:"
 
 msgid "Start over"
 msgstr "Aloita alusta"
 
 msgid "Please choose a population or generate a new one."
-msgstr "Valitse joukko tai luo uusi."
+msgstr "Valitse olemassaoleva tai uusi porukka."
 
 msgid "No personas found for that population. Generate a new one instead."
-msgstr "Tälle joukolle ei löytynyt persoonia. Luo uusi joukko."
+msgstr "Tähän porukkaan ei löytynyt yhtään tyyppiä. Kokeile luoda uusi porukka."
 
 msgid "Generated %(count)s personas for population '%(name)s'."
-msgstr "Luotiin %(count)s persoonaa joukolle '%(name)s'."
+msgstr "Luotiin %(count)s tyyppiä porukalle ”%(name)s”."
 
 msgid "(suggestions temporarily unavailable)"
-msgstr "(ehdotukset eivät juuri nyt ole saatavilla)"
+msgstr "(ehdotukset eivät ole juuri nyt saatavilla)"
