@@ -8,6 +8,7 @@ from sqlalchemy import (
     create_engine, MetaData, Table, Column, Integer, BigInteger, Text, DateTime,
     ForeignKey, func, select, String
 )
+from sqlalchemy.types import JSON
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -97,7 +98,7 @@ class Run(Base):
     population_id = Column(Integer, ForeignKey("populations.id", ondelete="SET NULL"))
     content_text = Column(Text)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
-
+    content_title = Column(Text) 
     session = relationship("UserSession")
     population = relationship("Population")
 
@@ -106,7 +107,7 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     run_id = Column(String, ForeignKey("runs.id", ondelete="CASCADE"), nullable=False)
-    persona_id = Column(Integer, ForeignKey("personas.id", ondelete="SET NULL"), nullable=True)
+    persona_id = Column(BigInteger, ForeignKey("personas.id", ondelete="SET NULL"), nullable=True)
     author = Column(Text, nullable=False)  # 'persona' / 'system' / 'user' / tms.
     text = Column(Text, nullable=False)
     score = Column(Integer, nullable=True)
@@ -361,10 +362,11 @@ def get_or_create_user_session(sid: str, lang: str | None = None):
                 us.lang = lang
         return us.id
 
-def create_run(sid: str, population_id: int | None, content_text: str | None):
+def create_run(sid: str, population_id: int | None, content_text: str | None, title: str | None = None):
     run_id = uuid.uuid4().hex
     with get_session() as s:
-        r = Run(id=run_id, session_id=sid, population_id=population_id, content_text=content_text)
+        r = Run(id=run_id, session_id=sid, population_id=population_id,
+                content_text=content_text, content_title=title)
         s.add(r)
         s.flush()
         return r.id

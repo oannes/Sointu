@@ -4,15 +4,33 @@ from flask import Flask, request, render_template, redirect, url_for, session, f
 from dotenv import load_dotenv
 from openai import OpenAI
 from flask_babel import Babel, gettext as _t
-from flask_sqlalchemy import SQLAlchemy
+from flask_babel import get_locale
+from models.db_utils import (
+    setup_database,
+    get_all_populations,
+    get_personas_by_population,
+    get_personas_by_population_id,
+    save_persona_to_db,
+    get_or_create_user_session,
+    create_run,
+    get_latest_run,
+    add_chat_message,
+    get_chat_by_run,
+    save_news_analysis,
+    save_population,
+    get_run_content,
+)
+
 import uuid
 
-app.jinja_env.globals.update(_=_t) 
+
 
 load_dotenv()
 
 # Flask setup
 app = Flask(__name__)
+
+app.jinja_env.globals.update(_=_t) 
 
 
 # Luo ja normalisoi DATABASE_URL ENNEN kuin asetat sen app.configiin
@@ -29,10 +47,6 @@ if DATABASE_URL.startswith("postgres://"):
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
 app.config['BABEL_DEFAULT_LOCALE'] = 'fi'
 app.config['BABEL_SUPPORTED_LOCALES'] = ['fi', 'en']
-app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-
-db = SQLAlchemy(app)
 
 babel = Babel(app)
 
@@ -40,6 +54,8 @@ babel = Babel(app)
 def ensure_sid():
     if 'sid' not in session:
         session['sid'] = uuid.uuid4().hex
+    # Päivitä serveripuolen sessio (lang mukaan jos on)
+    get_or_create_user_session(session['sid'], session.get('lang'))
 
 def select_locale():
     from flask import request, session
@@ -57,9 +73,10 @@ babel = Babel(app, locale_selector=select_locale)
 
 @app.get("/lang/<code>")
 def set_lang(code):
-    from flask import redirect, request, session, url_for
     if code in app.config['BABEL_SUPPORTED_LOCALES']:
         session['lang'] = code
+        # synkkaa DB-istuntoon
+        get_or_create_user_session(session['sid'], code)
     return redirect(request.referrer or url_for("index"))
 
 # Imports from your provided modules (now in models/)
@@ -81,23 +98,17 @@ def extract_score(text):
     m = re.search(r"(10|[0-9])\b", text)
     return int(m.group(1)) if m else None
 
-def ensure_state():
-    session.setdefault("population_name", None)
-    session.setdefault("reviewers", [])   # list of dicts
-    session.setdefault("user_content", "")
-    session.setdefault("chat", [])        # list of {name,text,score}
-    session.setdefault("news", {"articles": [], "suggestions": ""})
-
 @app.route("/")
 def index():
-    ensure_state()
     # Try to read existing populations from DB, else fallback empty
     existing = {}
-    try:
+     try:
+        from models.db_utils import get_personas_by_population, get_all_populations
         existing = get_personas_by_population() or {}
-    except Exception as e:
-        existing = {}
-    return render_template("index.html", existing_populations=existing, title="Sointu — Select reviewers")
+        pops = get_all_populations()  # jos näytät listaa
+    except Exception:
+        existing, pops = {}, []
+    return render_template("index.html", existing_populations=existing, pops=pops)
 
 @app.route("/populations")
 def populations():
@@ -111,27 +122,30 @@ def show_population(pid):
 
 @app.post("/select_reviewers")
 def select_reviewers():
-    ensure_state()
     pop = request.form.get("population_name") or ""
     if not pop:
         flash(_t("Please choose a population or generate a new one."))
         return redirect(url_for("index"))
-    # Load persons from DB
+
     try:
         populations = get_personas_by_population() or {}
         persons = populations.get(pop, [])
-    except Exception as e:
+    except Exception:
         persons = []
+
     if not persons:
         flash(_t("No personas found for that population. Generate a new one instead."))
         return redirect(url_for("index"))
-    session["population_name"] = pop
-    session["reviewers"] = persons
+
+    population_id = find_population_id_by_name(pop)
+    # Luo uusi run tälle istunnolle
+    run_id = create_run(session['sid'], population_id, content_text=None)
+    session['run_id'] = run_id
+    session['population_id'] = population_id  # pieni arvo, ok evästeessä
     return redirect(url_for("submit_content"))
 
 @app.post("/generate_population")
 def generate_population():
-    ensure_state()
     name = request.form.get("new_population") or "Generated audience"
     location = request.form.get("location") or "Helsinki"
     try:
@@ -139,41 +153,53 @@ def generate_population():
     except:
         size = 5
 
-    # Precompute attribute priors
     age_attr = get_age_attributes(name, location)
     gender_attr = get_gender_attributes(name, location)
 
-    reviewers = []
-    unique_names = set()
-    for _ in range(size):
-        persona = generate_role(name, location, age_attr, gender_attr, unique_names)
-        reviewers.append(persona.dict() if hasattr(persona, "dict") else dict(persona))
+  # Generoi personat muistiin
+    personas, unique_names = [], set()
+    for i in range(size):
+        p = generate_role(name, location, age_attr, gender_attr, unique_names)
+        pdata = (p.model_dump() if hasattr(p, "model_dump")
+                 else p.dict() if hasattr(p, "dict")
+                 else dict(p))
+        personas.append(pdata)
 
-        # Try to persist if DB is available
-        try:
-            save_persona_to_db(reviewers[-1], name)
-        except Exception:
-            pass
+    # Tallenna kaikki kerralla ja luo run
+    population_id = save_population(name, location, personas)
+    run_id = create_run(session['sid'], population_id, content_text=None)
 
-    session["population_name"] = name
-    session["reviewers"] = reviewers
-    flash(_t(f"Generated {len(reviewers)} personas for population '{name}'."))
+    # Sessioon vain pienet tunnisteet
+    session['population_id'] = population_id
+    session['run_id'] = run_id
+
+    flash(_t("Generated %(n)d personas for population '%(name)s'.", n=len(personas), name=name))
     return redirect(url_for("submit_content"))
 
 @app.get("/submit")
 def submit_content():
-    ensure_state()
-    return render_template("submit.html", title="Submit content")
+    if 'run_id' not in session:
+        return redirect(url_for("index"))
+    return render_template("submit.html")
 
 @app.post("/submit")
 def submit_content_post():
-    ensure_state()
-    session["user_content"] = (request.form.get("content") or "").strip()
-    session["user_title"] = (request.form.get("title") or "").strip()
-    if not session["user_content"]:
+    if 'run_id' not in session:
+        return redirect(url_for("index"))
+    content = (request.form.get("content") or "").strip()
+    title = (request.form.get("title") or "").strip()
+    if not content:
         flash(_t("Please paste your content text."))
         return redirect(url_for("submit_content"))
+    update_run_content(session['run_id'], content, title=title)
     return redirect(url_for("chat"))
+
+def find_population_id_by_name(name: str) -> int | None:
+    rows = get_all_populations()
+    for pid, pname, _loc in rows:
+        if pname == name:
+            return pid
+    return None
 
 # --- Reviewer chat generation ---
 def persona_to_identity(role: dict) -> str:
@@ -215,20 +241,24 @@ def reviewer_comment(client: OpenAI, role: dict, content: str) -> tuple[str,int|
     score = extract_score(text)
     return text, score
 
-@app.get("/chat")
-def chat():
-    ensure_state()
-    if not session["reviewers"] or not session.get("user_content"):
-        return redirect(url_for("index"))
-    # Generate one comment per reviewer (idempotent per session)
-    if not session["chat"]:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        comments = []
-        for r in session["reviewers"]:
-            txt, sc = reviewer_comment(client, r, session["user_content"])
-            comments.append({"name": r.get("name","Reviewer"), "text": txt, "score": sc})
-        session["chat"] = comments
-    return render_template("chat.html", chat=session["chat"], title="Reviewer chat")
+@app.get("/submit")
+def submit_content():
+    return render_template("submit.html", title="Submit content")
+
+@app.post("/submit")
+def submit_content_post():
+    content = (request.form.get("content") or "").strip()
+    title = (request.form.get("title") or "").strip()
+    if not content:
+        flash(_t("Please paste your content text."))
+        return redirect(url_for("submit_content"))
+
+    population_id = session.get("population_id")
+    run_id = create_run(session['sid'], population_id, content_text=content)
+    session['run_id'] = run_id
+    session['last_title'] = title  # pieni arvo, ok
+
+    return redirect(url_for("chat"))
 
 # --- News compare & suggestions ---
 def fetch_news_articles(query: str, max_items: int = 5):
@@ -288,28 +318,48 @@ def suggestions_from_news(user_text: str, articles: list[dict]) -> str:
     except Exception as e:
         return "(suggestions temporarily unavailable)"
 
+@app.get("/chat")
+def chat():
+    pid = session.get('population_id'); run_id = session.get('run_id')
+    if not pid or not run_id:
+        return redirect(url_for("index"))
+
+    # Onko chat-viestejä jo?
+    msgs = list_chat_messages(run_id)
+    if not msgs:
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        personas = get_personas_by_population_id(pid)
+        # hae runin content DB:stä
+        content = get_run_content(run_id)  # apuri, katso kohta 3
+        for r in personas:
+            txt, sc = reviewer_comment(client, r, content)
+            insert_chat_message(run_id, r.get("name","Reviewer"), txt, score=sc)
+        msgs = list_chat_messages(run_id)
+
+    return render_template("chat.html", chat=msgs)
+
 @app.get("/compare")
 def compare_news():
-    ensure_state()
-    if not session.get("user_content"): return redirect(url_for("submit_content"))
-    articles = fetch_news_articles(session["user_content"][:140])
-    sugg = suggestions_from_news(session["user_content"], articles)
-    session["news"] = {"articles": articles, "suggestions": sugg}
-    return render_template("news_compare.html", articles=articles, suggestions=sugg, title="News compare")
+    run_id = session.get('run_id')
+    if not run_id:
+        return redirect(url_for("index"))
+    content = get_run_content(run_id)
+    articles = fetch_news_articles(content[:140])
+    suggestions = suggestions_from_news(content, articles)
+    save_news_analysis(run_id, {"articles": articles, "suggestions": suggestions})
+    return render_template("news_compare.html", articles=articles, suggestions=suggestions)
 
 @app.get("/results")
 def results():
-    ensure_state()
-    # average score
-    scores = [c.get("score") for c in session.get("chat",[]) if c.get("score") is not None]
+    run_id = session.get('run_id')
+    if not run_id:
+        return redirect(url_for("index"))
+    chat = list_chat_messages(run_id)
+    scores = [m["score"] for m in chat if m.get("score") is not None]
     avg = round(sum(scores)/len(scores), 2) if scores else None
-    # Quick summary: join first sentences
-    summary = "\n".join([c["name"] + ": " + c["text"].split(". ")[0] + "." for c in session.get("chat",[])[:5]])
-    return render_template("results.html",
-                           avg_score=avg,
-                           summary=summary,
-                           suggestions=session.get("news",{}).get("suggestions",""),
-                           title="Results")
+    summary = "\n".join([m["name"] + ": " + m["text"].split(". ")[0] + "." for m in chat[:5]])
+    news = get_news_analysis(run_id) or {}
+    return render_template("results.html", avg_score=avg, summary=summary, suggestions=news.get("suggestions",""))
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
