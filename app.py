@@ -129,12 +129,6 @@ def submit_content():
     ensure_state()
     return render_template("submit.html", title="Submit content")
 
-@app.get("/lang/<code>")
-def set_lang(code):
-    if code in app.config['BABEL_SUPPORTED_LOCALES']:
-        session['lang'] = code
-    return redirect(request.referrer or url_for("index"))
-
 @app.post("/submit")
 def submit_content_post():
     ensure_state()
