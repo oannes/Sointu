@@ -11,4 +11,4 @@ numpy
 pydantic
 
 Babel
-Flask-Babel
+SQLAlchemy
