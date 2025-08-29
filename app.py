@@ -1,349 +1,241 @@
 
-import os, re, json
-from flask import Flask, request, render_template, redirect, url_for, session, flash
-from dotenv import load_dotenv
-from openai import OpenAI
-from flask_babel import Babel, gettext as _t
-from flask_babel import get_locale
-from models.db_utils import (
+import os, re, random
+from datetime import datetime
+from flask import Flask, render_template, request, redirect, url_for, session, flash
+
+# Reuse your DB helper layer
+from db_utils import (
     setup_database,
     get_all_populations,
-    get_personas_by_population,
-    get_personas_by_population_id,
-    save_persona_to_db,
+    save_population,
     get_or_create_user_session,
     create_run,
-    get_latest_run,
-    add_chat_message,
-    get_chat_by_run,
     save_news_analysis,
-    save_population,
-    get_run_content,
     get_news_analysis,
+    get_run_content,
 )
 
-import uuid
+# -------------- i18n shim --------------
+def _(s): return s
 
-
-
-load_dotenv()
-
-# Flask setup
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
 
-app.jinja_env.globals.update(_=_t) 
+# Ensure DB is initialized
+setup_database()
 
+# -------------- Helpers --------------
+def get_sid():
+    """Stable, anonymous session id for tying runs to a user."""
+    if "sid" not in session:
+        import uuid
+        session["sid"] = uuid.uuid4().hex
+    return session["sid"]
 
-# Luo ja normalisoi DATABASE_URL ENNEN kuin asetat sen app.configiin
-DATABASE_URL = os.environ.get("DATABASE_URL", "")
-if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL ei ole asetettu Herokussa.")
+def extract_topics(text, k=6):
+    words = re.findall(r"[A-Za-zÅÄÖåäö\-]{3,}", text.lower())
+    stop = set((
+        "the and for with this that from into your our you are was were been have has had not over under about "
+        "when where which whose while shall will would could should may might can just very really more less than "
+        "also only many much most least quite such like across per each any some every new old high low cost price "
+        "impact climate data customer investor employee yritys asiakkaat markkina"
+    ).split())
+    freq = {}
+    for w in words:
+        if w in stop: 
+            continue
+        freq[w] = freq.get(w, 0) + 1
+    topics = sorted(freq.items(), key=lambda x: (-x[1], x[0]))[:k]
+    return [t[0] for t in topics] or ["viesti", "kampanja"]
 
-# Heroku antaa usein postgres://, SQLAlchemy vaatii postgresql+psycopg2://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
-
-# Jos käytät Flask-SQLAlchemyä:
-
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret")
-app.config['BABEL_DEFAULT_LOCALE'] = 'fi'
-app.config['BABEL_SUPPORTED_LOCALES'] = ['fi', 'en']
-
-babel = Babel(app)
-
-@app.before_request
-def ensure_sid():
-    if 'sid' not in session:
-        session['sid'] = uuid.uuid4().hex
-    # Päivitä serveripuolen sessio (lang mukaan jos on)
-    get_or_create_user_session(session['sid'], session.get('lang'))
-
-def select_locale():
-    from flask import request, session
-    # session -> ?lang= -> Accept-Language -> default
-    if 'lang' in session and session['lang'] in app.config['BABEL_SUPPORTED_LOCALES']:
-        return session['lang']
-    lang = request.args.get('lang')
-    if lang in app.config['BABEL_SUPPORTED_LOCALES']:
-        session['lang'] = lang
-        return lang
-    return request.accept_languages.best_match(app.config['BABEL_SUPPORTED_LOCALES']) or app.config['BABEL_DEFAULT_LOCALE']
-
-# NEW v4 API: pass selector to constructor
-babel = Babel(app, locale_selector=select_locale)
-
-@app.get("/lang/<code>")
-def set_lang(code):
-    if code in app.config['BABEL_SUPPORTED_LOCALES']:
-        session['lang'] = code
-        # synkkaa DB-istuntoon
-        get_or_create_user_session(session['sid'], code)
-    return redirect(request.referrer or url_for("index"))
-
-# Imports from your provided modules (now in models/)
-from models.generateParticipants import generate_role, get_age_attributes, get_gender_attributes
-from models.generateParticipants import Persona
-from models.db_utils import get_personas_by_population, save_persona_to_db, setup_database
-from models.feedback import calculate_nps
-from models import main as news_main
-
-# Optional: initialize DB structure if DATABASE_URL is present
-if os.getenv("DATABASE_URL"):
-    try:
-        setup_database()
-    except Exception as e:
-        print("DB setup skipped / failed:", e)
-
-# Helper: extract first integer 0..10 from text
-def extract_score(text):
-    m = re.search(r"(10|[0-9])\b", text)
-    return int(m.group(1)) if m else None
-
-@app.route("/")
-def index():
-    # Try to read existing populations from DB, else fallback empty
-    existing = {}
-    try:
-        from models.db_utils import get_personas_by_population, get_all_populations
-        existing = get_personas_by_population() or {}
-        pops = get_all_populations()  # jos näytät listaa
-    except Exception:
-        existing, pops = {}, []
-    return render_template("index.html", existing_populations=existing, pops=pops)
-
-@app.route("/populations")
-def populations():
-    pops = get_all_populations()
-    return render_template("populations.html", pops=pops)
-
-@app.route("/population/<int:pid>")
-def show_population(pid):
-    personas = get_personas_by_population_id(pid)
-    return render_template("population.html", personas=personas)
-
-@app.post("/select_reviewers")
-def select_reviewers():
-    pop = request.form.get("population_name") or ""
-    if not pop:
-        flash(_t("Please choose a population or generate a new one."))
-        return redirect(url_for("index"))
-
-    try:
-        populations = get_personas_by_population() or {}
-        persons = populations.get(pop, [])
-    except Exception:
-        persons = []
-
-    if not persons:
-        flash(_t("No personas found for that population. Generate a new one instead."))
-        return redirect(url_for("index"))
-
-    population_id = find_population_id_by_name(pop)
-    # Luo uusi run tälle istunnolle
-    run_id = create_run(session['sid'], population_id, content_text=None)
-    session['run_id'] = run_id
-    session['population_id'] = population_id  # pieni arvo, ok evästeessä
-    return redirect(url_for("submit_content"))
-
-@app.post("/generate_population")
-def generate_population():
-    name = request.form.get("new_population") or "Generated audience"
-    location = request.form.get("location") or "Helsinki"
-    try:
-        size = max(1, min(20, int(request.form.get("size") or "5")))
-    except:
-        size = 5
-
-    age_attr = get_age_attributes(name, location)
-    gender_attr = get_gender_attributes(name, location)
-
-  # Generoi personat muistiin
-    personas, unique_names = [], set()
-    for i in range(size):
-        p = generate_role(name, location, age_attr, gender_attr, unique_names)
-        pdata = (p.model_dump() if hasattr(p, "model_dump")
-                 else p.dict() if hasattr(p, "dict")
-                 else dict(p))
-        personas.append(pdata)
-
-    # Tallenna kaikki kerralla ja luo run
-    population_id = save_population(name, location, personas)
-    run_id = create_run(session['sid'], population_id, content_text=None)
-
-    # Sessioon vain pienet tunnisteet
-    session['population_id'] = population_id
-    session['run_id'] = run_id
-
-    flash(_t("Generated %(n)d personas for population '%(name)s'.", n=len(personas), name=name))
-    return redirect(url_for("submit_content"))
-
-
-def find_population_id_by_name(name: str) -> int | None:
-    rows = get_all_populations()
-    for pid, pname, _loc in rows:
-        if pname == name:
-            return pid
-    return None
-
-# --- Reviewer chat generation ---
-def persona_to_identity(role: dict) -> str:
-    fields = [
-        "name","age","gender","orientation","location","mbti_type","occupation",
-        "education","income_level","financial_security","main_concern",
-        "source_of_joy","social_ties","values_and_beliefs","perspective_on_change","daily_routine"
-    ]
-    parts = [f"{k.replace('_',' ').title()}: {role.get(k,'Unknown')}" for k in fields]
-    return "You are a persona reviewer. " + "; ".join(parts)
-
-def reviewer_comment(client: OpenAI, role: dict, content: str) -> tuple[str,int|None]:
-    locale = str(get_locale()) or 'fi'
-    if locale.startswith('fi'):
-        identity = "Kerro, miten käyttäjän tuottama sisältö resonoi seuraavaksi kuvatulle persoonalle:" + persona_to_identity(role)
-        prompt = ("Lue käyttäjän sisältö ja kirjoita YKSI lyhyt kappale joka kuvaa ensimmäisessä persoonassa sitä, miten kuvattu persoona todennäköisesti suhtautuu viestiin."
-                  "Tee vastauksestasi elämänmakuinen ja pyri tarkastelemaan viestiä edustamasi ihmisen eletyn elämän näkökulmista."
-                  "Sisällytä yksi numeerinen pisteytys 0–10.\n\n"
-                  "KÄYTTÄJÄN SISÄLTÖ:\n" + content)
-    else:
-        identity = persona_to_identity(role)
-        prompt = (
-            "Read the user's content below and write ONE short paragraph as this persona reacting to it. "
-            "If appropriate, include a single numeric score 0-10 for how convincing it is, in the text.\n\nUSER CONTENT:\n" + content
-        )
-    try:
-        resp = client.chat.completions.create(
-            model=os.getenv("OPENAI_MODEL","gpt-4o-mini"),
-            messages=[
-                {"role":"system","content":identity},
-                {"role":"user","content":prompt}
-            ],
-            max_tokens=300,
-            temperature=0.7,
-        )
-        text = resp.choices[0].message.content.strip()
-    except Exception as e:
-        text = f"(fallback) As {role.get('name','Reviewer')}: I have concerns but see some positives."
-    score = extract_score(text)
-    return text, score
-
-@app.get("/submit")
-def submit_content():
-    return render_template("submit.html", title="Submit content")
-
-@app.post("/submit")
-def submit_content_post():
-    content = (request.form.get("content") or "").strip()
-    title = (request.form.get("title") or "").strip()
-    if not content:
-        flash(_t("Please paste your content text."))
-        return redirect(url_for("submit_content"))
-
-    population_id = session.get("population_id")
-    run_id = create_run(session['sid'], population_id, content_text=content)
-    session['run_id'] = run_id
-    session['last_title'] = title  # pieni arvo, ok
-
-    return redirect(url_for("chat"))
-
-# --- News compare & suggestions ---
 def fetch_news_articles(query: str, max_items: int = 5):
+    """Try gnews if available; otherwise return empty list (MVP keeps working offline)."""
     try:
         from gnews import GNews
-        locale = str(get_locale()) or 'fi'
-        if locale.startswith('fi'):
-            g = GNews(language="fi", country="FI", max_results=max_items)
-        else:
-            g = GNews(language="en", country="US", max_results=max_items)
+        g = GNews(language="fi", country="FI", max_results=max_items)
         results = g.get_news(query)
         arts = []
         for it in results or []:
             arts.append({
                 "title": it.get("title"),
                 "publisher": (it.get("publisher") or {}).get("title",""),
-                "published": it.get("published date",""),
+                "published": it.get("published date") or "",
                 "url": it.get("url"),
             })
         return arts
-    except Exception as e:
-        # fallback: no news
+    except Exception:
         return []
 
-def suggestions_from_news(user_text: str, articles: list[dict]) -> str:
-    locale = str(get_locale()) or 'fi'
-    # Use your provided main.generate_gpt_response to create suggestions
-    if locale.startswith('fi'):
-        identity = "Tehtäväsi on tunnistaa, mihin viimeaikaisiin keskustelunaiheisiin käyttäjän tuottama teksti liittyy"
-        prompt = (
-          "Tässä käyttäjän viesti:\n"
-          f"{user_text}\n\n"
-          "Tässä tuoreita aiheeseen liittyviä otsikoita:\n"
-          + "\n".join([f"- {a['title']} ({a['publisher']})" for a in articles[:5]]) +
-          "\n\nAnna 3–5 konkreettista ehdotusta..."
-        )
-    else:
-        identity = "You are a communications strategist who reads recent news and suggests how to improve a message."
-        summarized = "\n".join([f"- {a['title']} ({a['publisher']})" for a in articles[:5]])
-        prompt = (
-            "Here is the user's message:\n"
-            f"{user_text}\n\n"
-            "Here are recent related headlines:\n"
-            f"{summarized or 'None'}\n\n"
-            "Give 3–5 concrete suggestions to better align (or intentionally contrast) the message with the news cycle. "
-            "Return plain text bullets."
-        )
-    try:
-        txt = news_main.generate_gpt_response(identity, prompt, os.getenv("OPENAI_MODEL","gpt-4o-mini"))
-        if hasattr(txt, "choices"):
-            # In case their function returns an OpenAI response object; attempt to extract
-            try:
-                txt = txt.choices[0].message.content
-            except Exception:
-                txt = str(txt)
-        return txt if isinstance(txt, str) else str(txt)
-    except Exception as e:
-        return "(suggestions temporarily unavailable)"
+def build_mediasaa_snapshot(text: str) -> dict:
+    topics = extract_topics(text, 6)
+    # Query by top 2–3 topics joined for broader coverage
+    query = " ".join(topics[:3])
+    articles = fetch_news_articles(query, 6)
+    # Heuristic sentiment/tone from keyword hints if no analyzer is present
+    negativity = any(k in text.lower() for k in ["irtisan", "hinta", "kriisi", "ongel", "vuoto", "riita", "koh"])
+    positivity = any(k in text.lower() for k in ["paranee", "kasvu", "uusi", "lanse", "ennätys", "yhteistyö"])
+    # If we have articles, volume = len; otherwise synthetic 40–180
+    volume = len(articles) if articles else random.randint(40, 180)
+    sval = 0.0
+    if negativity and not positivity: sval = -0.2
+    if positivity and not negativity: sval = 0.2
+    if positivity and negativity: sval = 0.0
+    tone = "myönteinen" if sval > 0.1 else ("neutraali" if sval > -0.1 else "kielteinen")
+    return {
+        "query": query,
+        "topics": topics,
+        "sentiment": sval,
+        "tone": tone,
+        "volume": volume,
+        "articles": articles,
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
 
-@app.get("/chat")
-def chat():
-    pid = session.get('population_id'); run_id = session.get('run_id')
-    if not pid or not run_id:
+def estimate_resonance(text: str, pop_name: str, snapshot: dict):
+    """Population-level score -> decision & confidence (simple, explainable MVP)."""
+    base = 60 + int(snapshot["sentiment"] * 30) + min(snapshot["volume"] // 30, 10)
+    # Light, interpretable biases per preset name
+    biases = {
+        "Toimittajat": -5,
+        "Pk-yrityspäättäjät": -2,
+        "Sijoittajat": -3,
+        "Korkeakoulutetut 25–44": +2,
+        "Kriittinen kansalaisyleisö": -8,
+        "Koko Suomi 18–65": 0,
+    }
+    score = max(0, min(100, base + biases.get(pop_name, 0)))
+    if score >= 70: decision = "GO"
+    elif score >= 50: decision = "TWEAK"
+    else: decision = "NO-GO"
+    conf = min(0.95, 0.4 + 0.01 * snapshot["volume"] + 0.03 * len(snapshot["topics"]))
+    conf = round(conf, 2)
+    return score, decision, conf
+
+def tips_for_population(text: str, pop_name: str, snapshot: dict):
+    top = snapshot.get("topics", [])[:3]
+    tips = []
+    if snapshot.get("tone") == "kielteinen":
+        tips.append("Tunnista tämän hetken kriittinen kehys ja vastaa siihen alussa selkeästi.")
+    if any(t in ("hinta","kustannus","inflaatio") for t in top):
+        tips.append("Kerro konkreettinen euromääräinen hyöty/kustannusvaikutus kohderyhmälle.")
+    if any(t in ("vastuullisuus","esg","ympäristö") for t in top):
+        tips.append("Lisää todennettava mittari (lähde + luku) vastuullisuusväitteiden tueksi.")
+    if pop_name.lower().startswith("toimittajat"):
+        tips.append("Lisää datapiste ja linkki tausta-aineistoon (media briefing / FAQ).")
+    if pop_name.lower().startswith("pk-"):
+        tips.append("Korosta aikaa säästävää hyötyä ja riskit (mitä jos ei toimita?).")
+    if pop_name.lower().startswith("sijoittajat"):
+        tips.append("Avaa kassavirran/katteen mekanismi yhdellä luvulla.")
+    if not tips:
+        tips = ["Tiivistä ingressi kahteen virkkeeseen.", "Lisää selkeä CTA viimeiseen kappaleeseen."]
+    return tips[:3]
+
+# -------------- Routes --------------
+@app.get("/")
+def index():
+    return render_template("index.html", _=_, title="Sointu")
+
+@app.post("/analyze")
+def analyze():
+    title = (request.form.get("title") or "").strip()
+    content = (request.form.get("content") or "").strip()
+    if not content:
+        flash(_("Syötä sisältö ensin."))
         return redirect(url_for("index"))
 
-    # Onko chat-viestejä jo?
-    msgs = get_chat_by_run(run_id)  
-    if not msgs:
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        personas = get_personas_by_population_id(pid)
-        # hae runin content DB:stä
-        content = get_run_content(run_id)  # apuri, katso kohta 3
-        for r in personas:
-            txt, sc = reviewer_comment(client, r, content)
-            add_chat_message(run_id, r.get("name","Reviewer"), txt, score=sc)
-        msgs = get_chat_by_run(run_id)    
+    sid = get_sid()
+    lang = "fi"
+    get_or_create_user_session(sid=sid, lang=lang)
 
-    return render_template("chat.html", chat=msgs)
+    # Persist run & snapshot
+    run_id = create_run(sid=sid, population_id=None, content_text=content, title=title or None)
+    snapshot = build_mediasaa_snapshot(content)
+    save_news_analysis(run_id, snapshot)
 
-@app.get("/compare")
-def compare_news():
-    run_id = session.get('run_id')
-    if not run_id:
-        return redirect(url_for("index"))
-    content = get_run_content(run_id)
-    articles = fetch_news_articles(content[:140])
-    suggestions = suggestions_from_news(content, articles)
-    save_news_analysis(run_id, {"articles": articles, "suggestions": suggestions})
-    return render_template("news_compare.html", articles=articles, suggestions=suggestions)
+    # Load populations (DB) or fallback to a minimal list
+    pops = [p["name"] for p in (get_all_populations() or [])]
+    if not pops:
+        pops = ["Toimittajat","Pk-yrityspäättäjät","Sijoittajat","Korkeakoulutetut 25–44","Kriittinen kansalaisyleisö","Koko Suomi 18–65"]
+
+    # Score each population
+    results = []
+    for name in pops:
+        s, d, c = estimate_resonance(content, name, snapshot)
+        results.append({"name": name, "score": s, "decision": d, "confidence": c})
+    results.sort(key=lambda r: r["score"])  # worst first
+
+    # Stash in session for display
+    session["current_run_id"] = run_id
+    session["results"] = results
+    return redirect(url_for("results"))
 
 @app.get("/results")
 def results():
-    run_id = session.get('run_id')
+    run_id = session.get("current_run_id")
     if not run_id:
         return redirect(url_for("index"))
-    chat = get_chat_by_run(run_id) 
-    scores = [m["score"] for m in chat if m.get("score") is not None]
-    avg = round(sum(scores)/len(scores), 2) if scores else None
-    summary = "\n".join([m["name"] + ": " + m["text"].split(". ")[0] + "." for m in chat[:5]])
-    news = get_news_analysis(run_id) or {}
-    return render_template("results.html", avg_score=avg, summary=summary, suggestions=news.get("suggestions",""))
+    snapshot = get_news_analysis(run_id) or {}
+    results = session.get("results", [])
+    return render_template("results.html", _=_, snapshot=snapshot, results=results, title="Sointu")
+
+@app.post("/populations/new")
+def add_population():
+    # Create a new population with 3 stub personas (fits your DB signature)
+    name = (request.form.get("new_population") or "").strip()
+    if not name:
+        flash(_("Anna populaation nimi."))
+        return redirect(url_for("results"))
+    # Avoid duplicates (case-insensitive)
+    existing = [p["name"] for p in (get_all_populations() or [])]
+    if name.lower() in [e.lower() for e in existing]:
+        flash(_("Populaatio on jo olemassa."))
+        return redirect(url_for("results"))
+
+    personas = [
+        {"name": "Alex", "age": 35, "gender": "other", "orientation": "", "location": "FI",
+         "mbti_type": "", "occupation": "", "education": "", "income_level": "", "financial_security": "",
+         "main_concern": "", "source_of_joy": "", "social_ties": "", "values_and_beliefs": "",
+         "perspective_on_change": "", "daily_routine": ""},
+        {"name": "Mia", "age": 29, "gender": "female", "orientation": "", "location": "FI",
+         "mbti_type": "", "occupation": "", "education": "", "income_level": "", "financial_security": "",
+         "main_concern": "", "source_of_joy": "", "social_ties": "", "values_and_beliefs": "",
+         "perspective_on_change": "", "daily_routine": ""},
+        {"name": "Jussi", "age": 48, "gender": "male", "orientation": "", "location": "FI",
+         "mbti_type": "", "occupation": "", "education": "", "income_level": "", "financial_security": "",
+         "main_concern": "", "source_of_joy": "", "social_ties": "", "values_and_beliefs": "",
+         "perspective_on_change": "", "daily_routine": ""},
+    ]
+    # save_population(name, location, personas)
+    save_population(name=name, location="FI", personas=personas)
+
+    # Re-score with the new population included
+    run_id = session.get("current_run_id")
+    snapshot = get_news_analysis(run_id) or {}
+    content = (get_run_content(run_id) or "") if run_id else ""
+    pops = [p["name"] for p in (get_all_populations() or [])]
+    results = []
+    for n in pops:
+        s, d, c = estimate_resonance(content, n, snapshot)
+        results.append({"name": n, "score": s, "decision": d, "confidence": c})
+    results.sort(key=lambda r: r["score"])
+    session["results"] = results
+    return redirect(url_for("results"))
+
+@app.get("/suggestions/<path:pop_name>")
+def pop_suggestions(pop_name):
+    run_id = session.get("current_run_id")
+    if not run_id:
+        return redirect(url_for("index"))
+    snapshot = get_news_analysis(run_id) or {}
+    content = (get_run_content(run_id) or "")
+    tips = tips_for_population(content, pop_name, snapshot)
+    return render_template("suggestions.html", _=_, pop_name=pop_name, tips=tips, title="Sointu")
+
+# Keep route name compatible with your header links
+@app.get("/set_lang/<code>")
+def set_lang(code):
+    flash(_("Kielivalinta tallennettu: ") + code.upper())
+    return redirect(request.referrer or url_for("index"))
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)

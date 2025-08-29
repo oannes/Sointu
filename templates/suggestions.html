@@ -1,0 +1,15 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h1>{{ _("Suositukset:") }} {{ pop_name }}</h1>
+<div class="card">
+  <ol>
+    {% for t in tips %}
+      <li>{{ t }}</li>
+    {% endfor %}
+  </ol>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('results') }}">{{ _("Takaisin päätöstauluun") }}</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,43 +1,17 @@
 
 {% extends "base.html" %}
 {% block content %}
-<h1>{{ _("Select or generate reviewers") }}</h1>
+<h1>{{ _("Varmenna kuinka hyvin viestisi resonoi päivän mediasäässä eri ihmisryhmille.") }}</h1>
+<p>{{ _("Syötä blogipostaus, postaus tai markkinointiviesti.") }}</p>
 <div class="card">
-  <form method="post" action="{{ url_for('select_reviewers') }}">
-    <label>{{ _("Choose existing population") }}</label>
-    <select name="population_name">
-      <option value="">{{ _("— none —") }}</option>
-      {% for pop in existing_populations %}
-      <option value="{{ pop }}">{{ pop }} ({{ existing_populations[pop]|length }} personas)</option>
-      {% endfor %}
-    </select>
+  <form method="post" action="{{ url_for('analyze') }}">
+    <label>{{ _("Otsikko (valinnainen)") }}</label>
+    <input type="text" name="title" placeholder="{{ _('Otsikko tai kuvaus') }}">
+    <label>{{ _("Sisältö (teksti)") }}</label>
+    <textarea name="content" placeholder="{{ _('Liitä viestisi tähän…') }}" autofocus style="min-height: 200px">{{ session.get('user_content','') }}</textarea>
     <div class="actions">
-      <button type="submit">{{ _("Use selected population") }}</button>
+      <button type="submit" class="btn">{{ _("Analysoi mediasää ja resonanssi") }}</button>
     </div>
-  </form>
-</div>
-
-<div class="card">
-  <form method="post" action="{{ url_for('generate_population') }}">
-    <label>{{ _("Or generate a new population") }}</label>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-      <div>
-        <label>{{ _("Population name") }}</label>
-        <input type="text" name="new_population" placeholder="e.g., Finnish adults">
-      </div>
-      <div>
-        <label>{{ _("Location") }}</label>
-        <input type="text" name="location" placeholder="e.g., Helsinki">
-      </div>
-      <div>
-        <label>{{ _("Size") }}</label>
-        <input type="text" name="size" value="5">
-      </div>
-    </div>
-    <div class="actions">
-      <button type="submit" class="btn">{{ _("Generate") }}</button>
-    </div>
-    <small>{{ _("We’ll generate realistic personas and simulate large panels with remarkable accuracy.") }}</small>
   </form>
 </div>
 {% endblock %}

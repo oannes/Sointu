@@ -1,16 +1,51 @@
 
 {% extends "base.html" %}
 {% block content %}
-<h1>{{ _("Final rating & suggestions") }}</h1>
-<div class="card">
-  <p><strong>{{ _("Average reviewer score:") }}</strong> {{ avg_score if avg_score is not none else "n/a" }}</p>
-  <p><strong>{{ _("Review summary:") }}</strong></p>
-  <div style="white-space:pre-wrap">{{ summary }}</div>
-  <hr>
-  <p><strong>{{ _("News-based suggestions:") }}</strong></p>
-  <div style="white-space:pre-wrap">{{ suggestions }}</div>
-  <div class="actions">
-    <a class="btn" href="{{ url_for('index') }}">{{ _("Start over") }}</a>
+<h1>{{ _("Päätöstaulu populaatioittain") }}</h1>
+<div class="grid">
+  <div class="card">
+    <h3>{{ _("Mediasää nyt") }}</h3>
+    <p><strong>{{ _("Kysely") }}:</strong> {{ snapshot.query }}</p>
+    <p><strong>{{ _("Tunnelma") }}:</strong> {{ snapshot.tone }}</p>
+    <p><strong>{{ _("Volyymi") }}:</strong> {{ snapshot.volume }}</p>
+    <p><strong>{{ _("Top-aiheet") }}:</strong> {{ ", ".join(snapshot.topics) }}</p>
+    <h4>{{ _("Top-osumat") }}</h4>
+    <div class="list">
+      {% for a in snapshot.articles %}
+        <div>
+          <div><strong>{{ a.title }}</strong></div>
+          <small>{{ a.publisher }}{% if a.published %} — {{ a.published }}{% endif %}</small>
+          {% if a.url %}<div><a href="{{ a.url }}" target="_blank" class="btn secondary">Lue</a></div>{% endif %}
+        </div>
+        {% if not loop.last %}<hr>{% endif %}
+      {% endfor %}
+      {% if not snapshot.articles %}
+        <small>{{ _("Ei suoria uutisosumia (MVP: stub). Silti tuotamme päätöksen mediasään perusteella.") }}</small>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card">
+    <h3>{{ _("Populaatiot & resonanssi") }}</h3>
+    <form method="post" action="{{ url_for('add_population') }}" class="inline-form">
+      <input type="text" name="new_population" placeholder="{{ _('Lisää uusi populaatio…') }}">
+      <button type="submit" class="btn secondary">{{ _("Lisää") }}</button>
+    </form>
+    <div class="list">
+      {% for r in results %}
+        <div class="pop-row">
+          <div>
+            <strong>{{ r.name }}</strong><br>
+            <small>{{ _("Luottamus") }}: {{ (r.confidence*100)|round(0) }}%</small>
+          </div>
+          <div class="pill {{ r.decision|lower|replace('no-go','no-go') }}">{{ r.decision }}</div>
+          <div><small>{{ _("Pisteet") }}: {{ r.score }}/100</small></div>
+          {% if r.decision != "GO" %}
+            <div><a class="btn" href="{{ url_for('pop_suggestions', pop_name=r.name) }}">{{ _("Katso suositukset resonanssin parantamiseksi") }}</a></div>
+          {% endif %}
+        </div>
+        {% if not loop.last %}<hr>{% endif %}
+      {% endfor %}
+    </div>
   </div>
 </div>
 {% endblock %}
