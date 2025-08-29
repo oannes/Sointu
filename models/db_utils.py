@@ -162,6 +162,16 @@ def _get_or_create_population(session, name: str, location: str | None = None) -
 
 # --- Public API ---
 
+def get_news_analysis(run_id: str):
+    with get_session() as s:
+        row = s.execute(
+            select(NewsAnalysis)
+            .where(NewsAnalysis.run_id == run_id)
+            .order_by(NewsAnalysis.created_at.desc())
+            .limit(1)
+        ).scalars().first()
+        return row.result_json if row else None
+
 def save_population(name, location, personas):
     """
     Create a population and insert given personas (list of objects/dicts).
@@ -402,7 +412,7 @@ def save_news_analysis(run_id: str, result_json: dict):
         s.add(na)
         s.flush()
         return na.id
-        
+
 def get_run_content(run_id: str):
     """Palauta runin sisältötekstin (ja halutessa otsikon)."""
     with get_session() as s:

@@ -19,6 +19,7 @@ from models.db_utils import (
     save_news_analysis,
     save_population,
     get_run_content,
+    get_news_analysis,
 )
 
 import uuid
@@ -308,7 +309,7 @@ def chat():
         return redirect(url_for("index"))
 
     # Onko chat-viestejä jo?
-    msgs = list_chat_messages(run_id)
+    msgs = get_chat_by_run(run_id)  
     if not msgs:
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         personas = get_personas_by_population_id(pid)
@@ -316,8 +317,8 @@ def chat():
         content = get_run_content(run_id)  # apuri, katso kohta 3
         for r in personas:
             txt, sc = reviewer_comment(client, r, content)
-            insert_chat_message(run_id, r.get("name","Reviewer"), txt, score=sc)
-        msgs = list_chat_messages(run_id)
+            add_chat_message(run_id, r.get("name","Reviewer"), txt, score=sc)
+        msgs = get_chat_by_run(run_id)    
 
     return render_template("chat.html", chat=msgs)
 
@@ -337,7 +338,7 @@ def results():
     run_id = session.get('run_id')
     if not run_id:
         return redirect(url_for("index"))
-    chat = list_chat_messages(run_id)
+    chat = get_chat_by_run(run_id) 
     scores = [m["score"] for m in chat if m.get("score") is not None]
     avg = round(sum(scores)/len(scores), 2) if scores else None
     summary = "\n".join([m["name"] + ": " + m["text"].split(". ")[0] + "." for m in chat[:5]])
