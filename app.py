@@ -1,8 +1,9 @@
+
 import os, re, random
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 
-# Reuse your DB helper layer
+# Use your original package structure (no broad fallbacks)
 from models.db_utils import (
     setup_database,
     get_all_populations,
@@ -14,18 +15,16 @@ from models.db_utils import (
     get_run_content,
 )
 
-# -------------- i18n shim --------------
-def _(s): return s
+def _(s): return s  # i18n shim
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
 
-# Ensure DB is initialized
+# Initialize DB once
 setup_database()
 
-# -------------- Helpers --------------
+# ---------------- Helpers ----------------
 def get_sid():
-    """Stable, anonymous session id for tying runs to a user."""
     if "sid" not in session:
         import uuid
         session["sid"] = uuid.uuid4().hex
@@ -47,8 +46,8 @@ def extract_topics(text, k=6):
     topics = sorted(freq.items(), key=lambda x: (-x[1], x[0]))[:k]
     return [t[0] for t in topics] or ["viesti", "kampanja"]
 
-def fetch_news_articles(query: str, max_items: int = 5):
-    """Try gnews if available; otherwise return empty list (MVP keeps working offline)."""
+def fetch_news_articles(query: str, max_items: int = 6):
+    """Optional dependency. No crash if gnews is missing."""
     try:
         from gnews import GNews
         g = GNews(language="fi", country="FI", max_results=max_items)
@@ -67,13 +66,10 @@ def fetch_news_articles(query: str, max_items: int = 5):
 
 def build_mediasaa_snapshot(text: str) -> dict:
     topics = extract_topics(text, 6)
-    # Query by top 2–3 topics joined for broader coverage
     query = " ".join(topics[:3])
     articles = fetch_news_articles(query, 6)
-    # Heuristic sentiment/tone from keyword hints if no analyzer is present
     negativity = any(k in text.lower() for k in ["irtisan", "hinta", "kriisi", "ongel", "vuoto", "riita", "koh"])
     positivity = any(k in text.lower() for k in ["paranee", "kasvu", "uusi", "lanse", "ennätys", "yhteistyö"])
-    # If we have articles, volume = len; otherwise synthetic 40–180
     volume = len(articles) if articles else random.randint(40, 180)
     sval = 0.0
     if negativity and not positivity: sval = -0.2
@@ -90,10 +86,47 @@ def build_mediasaa_snapshot(text: str) -> dict:
         "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
     }
 
+# ---- Robust coercion for population rows (fix for tuple/dict/Row) ----
+def _coerce_population_name(row) -> str:
+    # SQLAlchemy Row: try mapping first
+    m = getattr(row, "_mapping", None)
+    if m and isinstance(m, dict):
+        for key in ("name", "population_name", "pname"):
+            if key in m and m[key]:
+                return str(m[key])
+    # dict row
+    if isinstance(row, dict):
+        for key in ("name", "population_name", "pname"):
+            if key in row and row[key]:
+                return str(row[key])
+    # tuple/list row: (id, name, ...)
+    if isinstance(row, (list, tuple)):
+        if len(row) >= 2:
+            return str(row[1])
+        if len(row) == 1:
+            return str(row[0])
+    # object with .name attr
+    if hasattr(row, "name"):
+        try:
+            val = getattr(row, "name")
+            if val:
+                return str(val)
+        except Exception:
+            pass
+    # fallback
+    return str(row)
+
+def _get_population_names() -> list[str]:
+    rows = get_all_populations() or []
+    names = []
+    for r in rows:
+        nm = _coerce_population_name(r).strip()
+        if nm and nm not in names:
+            names.append(nm)
+    return names
+
 def estimate_resonance(text: str, pop_name: str, snapshot: dict):
-    """Population-level score -> decision & confidence (simple, explainable MVP)."""
     base = 60 + int(snapshot["sentiment"] * 30) + min(snapshot["volume"] // 30, 10)
-    # Light, interpretable biases per preset name
     biases = {
         "Toimittajat": -5,
         "Pk-yrityspäättäjät": -2,
@@ -103,12 +136,9 @@ def estimate_resonance(text: str, pop_name: str, snapshot: dict):
         "Koko Suomi 18–65": 0,
     }
     score = max(0, min(100, base + biases.get(pop_name, 0)))
-    if score >= 70: decision = "GO"
-    elif score >= 50: decision = "TWEAK"
-    else: decision = "NO-GO"
+    decision = "GO" if score >= 70 else ("TWEAK" if score >= 50 else "NO-GO")
     conf = min(0.95, 0.4 + 0.01 * snapshot["volume"] + 0.03 * len(snapshot["topics"]))
-    conf = round(conf, 2)
-    return score, decision, conf
+    return score, decision, round(conf, 2)
 
 def tips_for_population(text: str, pop_name: str, snapshot: dict):
     top = snapshot.get("topics", [])[:3]
@@ -129,7 +159,7 @@ def tips_for_population(text: str, pop_name: str, snapshot: dict):
         tips = ["Tiivistä ingressi kahteen virkkeeseen.", "Lisää selkeä CTA viimeiseen kappaleeseen."]
     return tips[:3]
 
-# -------------- Routes --------------
+# ---------------- Routes ----------------
 @app.get("/")
 def index():
     return render_template("index.html", _=_, title="Sointu")
@@ -142,30 +172,27 @@ def analyze():
         flash(_("Syötä sisältö ensin."))
         return redirect(url_for("index"))
 
+    # Keep your original calling style (positional args) to avoid signature drift
     sid = get_sid()
-    lang = "fi"
-    get_or_create_user_session(sid=sid, lang=lang)
+    get_or_create_user_session(sid, "fi")
 
-    # Persist run & snapshot
-    run_id = create_run(sid=sid, population_id=None, content_text=content, title=title or None)
+    run_id = create_run(sid, None, content_text=content, title=title or None)
     snapshot = build_mediasaa_snapshot(content)
     save_news_analysis(run_id, snapshot)
 
-    # Load populations (DB) or fallback to a minimal list
-    pops = [p["name"] for p in (get_all_populations() or [])]
+    pops = _get_population_names()
     if not pops:
         pops = ["Toimittajat","Pk-yrityspäättäjät","Sijoittajat","Korkeakoulutetut 25–44","Kriittinen kansalaisyleisö","Koko Suomi 18–65"]
 
-    # Score each population
     results = []
     for name in pops:
         s, d, c = estimate_resonance(content, name, snapshot)
         results.append({"name": name, "score": s, "decision": d, "confidence": c})
     results.sort(key=lambda r: r["score"])  # worst first
 
-    # Stash in session for display
     session["current_run_id"] = run_id
     session["results"] = results
+    session["user_content"] = content
     return redirect(url_for("results"))
 
 @app.get("/results")
@@ -179,14 +206,13 @@ def results():
 
 @app.post("/populations/new")
 def add_population():
-    # Create a new population with 3 stub personas (fits your DB signature)
     name = (request.form.get("new_population") or "").strip()
     if not name:
         flash(_("Anna populaation nimi."))
         return redirect(url_for("results"))
-    # Avoid duplicates (case-insensitive)
-    existing = [p["name"] for p in (get_all_populations() or [])]
-    if name.lower() in [e.lower() for e in existing]:
+
+    existing = [n.lower() for n in _get_population_names()]
+    if name.lower() in existing:
         flash(_("Populaatio on jo olemassa."))
         return redirect(url_for("results"))
 
@@ -204,14 +230,13 @@ def add_population():
          "main_concern": "", "source_of_joy": "", "social_ties": "", "values_and_beliefs": "",
          "perspective_on_change": "", "daily_routine": ""},
     ]
-    # save_population(name, location, personas)
-    save_population(name=name, location="FI", personas=personas)
+    save_population(name, "FI", personas)
 
-    # Re-score with the new population included
+    # Rerun scoring
     run_id = session.get("current_run_id")
     snapshot = get_news_analysis(run_id) or {}
     content = (get_run_content(run_id) or "") if run_id else ""
-    pops = [p["name"] for p in (get_all_populations() or [])]
+    pops = _get_population_names()
     results = []
     for n in pops:
         s, d, c = estimate_resonance(content, n, snapshot)
@@ -230,7 +255,6 @@ def pop_suggestions(pop_name):
     tips = tips_for_population(content, pop_name, snapshot)
     return render_template("suggestions.html", _=_, pop_name=pop_name, tips=tips, title="Sointu")
 
-# Keep route name compatible with your header links
 @app.get("/set_lang/<code>")
 def set_lang(code):
     flash(_("Kielivalinta tallennettu: ") + code.upper())
