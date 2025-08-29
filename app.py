@@ -1,6 +1,7 @@
 
 import os, re, random
 from datetime import datetime
+from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 
 # Use your original package structure (no broad fallbacks)
@@ -125,6 +126,60 @@ def _get_population_names() -> list[str]:
             names.append(nm)
     return names
 
+def _parse_published_dt(val):
+    if not val:
+        return None
+    s = str(val)
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%SZ"):
+        try:
+            return datetime.strptime(s, fmt)
+        except Exception:
+            pass
+    # last resort: try fromisoformat (may raise)
+    try:
+        return datetime.fromisoformat(s.replace("Z",""))
+    except Exception:
+        return None
+
+def rank_articles(articles: list, topics: list[str]) -> list:
+    """Pick and order the most relevant articles, preferring the last 14 days and topic overlap."""
+    now = datetime.utcnow()
+    horizon = now - timedelta(days=14)
+    scored = []
+    tset = [t.lower() for t in (topics or [])]
+    for a in (articles or []):
+        title = (a.get("title") or "").lower()
+        score = sum(1 for t in tset if t and t in title)
+        dt = _parse_published_dt(a.get("published"))
+        # Filter out clearly old items when we can parse a date
+        if dt and dt < horizon:
+            continue
+        # Prefer newer if available
+        recency_bonus = 0
+        if dt:
+            recency_bonus = max(0, (dt - horizon).total_seconds() / (14 * 24 * 3600))  # 0..1
+        scored.append((score + recency_bonus, a))
+    scored.sort(key=lambda x: (-x[0], (x[1].get("published") or ""), (x[1].get("title") or "")))
+    return [a for _, a in scored]
+
+def summarize_topic_resonance(topics: list[str], snapshot: dict, text: str) -> str:
+    """Lightweight heuristic summary for now (you can swap this to a GPT call later)."""
+    tone = snapshot.get("tone") or "neutraali"
+    tops = ", ".join(topics[:3]) if topics else "—"
+    lines = []
+    if tone == "myönteinen":
+        lines.append("Kokonaiskuva: Mediasää on myönteinen — mahdollisuus vahvistaa viestin ydinteemoja.")
+    elif tone == "kielteinen":
+        lines.append("Kokonaiskuva: Mediasää on kriittinen — suosittelen rajaamaan lupauksia ja tuomaan todisteet näkyviin.")
+    else:
+        lines.append("Kokonaiskuva: Mediasää on neutraali — viesti voi omia agendan selkeällä kulmalla.")
+    lines.append(f"Keskeiset teemat: {tops}")
+    if topics:
+        lines.append(f"Resonanssi: viesti osuu teemoihin '{topics[0]}' ja '{topics[1]}' (jos mainittu), "
+                     "mutta varmista, että ingressi sanoo asian suoraan ensimmäisessä virkkeessä.")
+    lines.append("Nopea parannus: lisää 1 konkreettinen datapiste ja CTA viimeiseen kappaleeseen.")
+    return "\n".join(lines)
+
 def estimate_resonance(text: str, pop_name: str, snapshot: dict):
     base = 60 + int(snapshot["sentiment"] * 30) + min(snapshot["volume"] // 30, 10)
     biases = {
@@ -201,8 +256,32 @@ def results():
     if not run_id:
         return redirect(url_for("index"))
     snapshot = get_news_analysis(run_id) or {}
-    results = session.get("results", [])
-    return render_template("results.html", _=_, snapshot=snapshot, results=results, title="Sointu")
+    results_list = session.get("results", [])
+    user_text = (get_run_content(run_id) or session.get("user_content","")).strip()
+
+    topics = snapshot.get("topics", [])
+    all_articles = snapshot.get("articles", []) or []
+    sorted_articles = rank_articles(all_articles, topics)
+
+    show_more = request.args.get("more") == "1"
+    articles_display = sorted_articles if show_more else sorted_articles[:3]
+    has_more = len(sorted_articles) > 3
+
+    topic_reso = summarize_topic_resonance(topics, snapshot, user_text)
+
+    return render_template(
+        "results.html",
+        _=_,
+        title="Sointu",
+        user_text=user_text,
+        topics=topics,
+        articles=articles_display,
+        has_more=has_more,
+        show_more=show_more,
+        topic_resonance=topic_reso,
+        snapshot=snapshot,
+        results=results_list,
+    )
 
 @app.post("/populations/new")
 def add_population():

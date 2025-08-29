@@ -1,51 +1,84 @@
-
 {% extends "base.html" %}
 {% block content %}
-<h1>{{ _("Päätöstaulu populaatioittain") }}</h1>
-<div class="grid">
-  <div class="card">
-    <h3>{{ _("Mediasää nyt") }}</h3>
-    <p><strong>{{ _("Kysely") }}:</strong> {{ snapshot.query }}</p>
-    <p><strong>{{ _("Tunnelma") }}:</strong> {{ snapshot.tone }}</p>
-    <p><strong>{{ _("Volyymi") }}:</strong> {{ snapshot.volume }}</p>
-    <p><strong>{{ _("Top-aiheet") }}:</strong> {{ ", ".join(snapshot.topics) }}</p>
-    <h4>{{ _("Top-osumat") }}</h4>
-    <div class="list">
-      {% for a in snapshot.articles %}
-        <div>
-          <div><strong>{{ a.title }}</strong></div>
-          <small>{{ a.publisher }}{% if a.published %} — {{ a.published }}{% endif %}</small>
-          {% if a.url %}<div><a href="{{ a.url }}" target="_blank" class="btn secondary">Lue</a></div>{% endif %}
-        </div>
-        {% if not loop.last %}<hr>{% endif %}
-      {% endfor %}
-      {% if not snapshot.articles %}
-        <small>{{ _("Ei suoria uutisosumia (MVP: stub). Silti tuotamme päätöksen mediasään perusteella.") }}</small>
+<h1>{{ _("Tulokset") }}</h1>
+
+<!-- 1) User-submitted message -->
+<div class="card">
+  <h3>{{ _("Syötetty viesti") }}</h3>
+  <div style="white-space:pre-wrap">{{ user_text }}</div>
+</div>
+
+<!-- 2) GPT analysed key topics -->
+<div class="card">
+  <h3>{{ _("Keskeiset aiheet (GPT)") }}</h3>
+  {% if topics and topics|length > 0 %}
+    <p>{{ ", ".join(topics) }}</p>
+  {% else %}
+    <small>{{ _("Ei tunnistettuja aiheita.") }}</small>
+  {% endif %}
+</div>
+
+<!-- 3) Three best fitting news items (last 2 weeks) + show more -->
+<div class="card">
+  <h3>{{ _("Sopivat uutiset (viimeiset 14 vrk)") }}</h3>
+  <div class="list">
+    {% for a in articles %}
+      <div>
+        <div><strong>{{ a.title }}</strong></div>
+        <small>{{ a.publisher }}{% if a.published %} — {{ a.published }}{% endif %}</small>
+        {% if a.url %}<div><a href="{{ a.url }}" target="_blank" class="btn secondary">{{ _("Lue") }}</a></div>{% endif %}
+      </div>
+      {% if not loop.last %}<hr>{% endif %}
+    {% endfor %}
+    {% if not articles or articles|length == 0 %}
+      <small>{{ _("Ei suoria uutisosumia (MVP).") }}</small>
+    {% endif %}
+  </div>
+  {% if has_more %}
+    <div class="actions">
+      {% if show_more %}
+        <a class="btn secondary" href="{{ url_for('results') }}">{{ _("Näytä vähemmän") }}</a>
+      {% else %}
+        <a class="btn secondary" href="{{ url_for('results', more=1) }}">{{ _("Näytä lisää") }}</a>
       {% endif %}
     </div>
-  </div>
-  <div class="card">
-    <h3>{{ _("Populaatiot & resonanssi") }}</h3>
-    <form method="post" action="{{ url_for('add_population') }}" class="inline-form">
-      <input type="text" name="new_population" placeholder="{{ _('Lisää uusi populaatio…') }}">
-      <button type="submit" class="btn secondary">{{ _("Lisää") }}</button>
-    </form>
-    <div class="list">
-      {% for r in results %}
-        <div class="pop-row">
-          <div>
-            <strong>{{ r.name }}</strong><br>
-            <small>{{ _("Luottamus") }}: {{ (r.confidence*100)|round(0) }}%</small>
-          </div>
-          <div class="pill {{ r.decision|lower|replace('no-go','no-go') }}">{{ r.decision }}</div>
-          <div><small>{{ _("Pisteet") }}: {{ r.score }}/100</small></div>
-          {% if r.decision != "GO" %}
-            <div><a class="btn" href="{{ url_for('pop_suggestions', pop_name=r.name) }}">{{ _("Katso suositukset resonanssin parantamiseksi") }}</a></div>
-          {% endif %}
+  {% endif %}
+</div>
+
+<!-- 4) GPT analysis of how well the message resonates with key topics -->
+<div class="card">
+  <h3>{{ _("Resonanssianalyysi teemoista (GPT)") }}</h3>
+  <div style="white-space:pre-wrap">{{ topic_resonance }}</div>
+</div>
+
+<!-- 5) Population resonance list -->
+<div class="card">
+  <h3>{{ _("Populaatiot & resonanssi") }}</h3>
+  <div class="list">
+    {% for r in results %}
+      <div class="pop-row">
+        <div>
+          <strong>{{ r.name }}</strong><br>
+          <small>{{ _("Luottamus") }}: {{ (r.confidence*100)|round(0) }}%</small>
         </div>
-        {% if not loop.last %}<hr>{% endif %}
-      {% endfor %}
-    </div>
+        <div class="pill {{ r.decision|lower|replace('no-go','no-go') }}">{{ r.decision }}</div>
+        <div><small>{{ _("Pisteet") }}: {{ r.score }}/100</small></div>
+        {% if r.decision != "GO" %}
+          <div><a class="btn" href="{{ url_for('pop_suggestions', pop_name=r.name) }}">{{ _("Katso suositukset resonanssin parantamiseksi") }}</a></div>
+        {% endif %}
+      </div>
+      {% if not loop.last %}<hr>{% endif %}
+    {% endfor %}
   </div>
 </div>
+
+<!-- 6) Add new populations -->
+<div class="card">
+  <h3>{{ _("Lisää populaatio") }}</h3>
+  <form method="post" action="{{ url_for('add_population') }}" class="inline-form">
+    <input type="text" name="new_population" placeholder="{{ _('Lisää uusi populaatio…') }}">
+    <button type="submit" class="btn secondary">{{ _("Lisää") }}</button>
+  </form>
+</div>
+
 {% endblock %}
