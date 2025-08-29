@@ -246,8 +246,6 @@ def analyze():
     results.sort(key=lambda r: r["score"])  # worst first
 
     session["current_run_id"] = run_id
-    session["results"] = results
-    session["user_content"] = content
     return redirect(url_for("results"))
 
 @app.get("/results")
@@ -255,19 +253,38 @@ def results():
     run_id = session.get("current_run_id")
     if not run_id:
         return redirect(url_for("index"))
-    snapshot = get_news_analysis(run_id) or {}
-    results_list = session.get("results", [])
-    user_text = (get_run_content(run_id) or session.get("user_content","")).strip()
 
+    # 1) Load data from DB, not from session
+    snapshot = get_news_analysis(run_id) or {}
+    user_text = (get_run_content(run_id) or "").strip()
+
+    # 2) Topics & news ranking
     topics = snapshot.get("topics", [])
     all_articles = snapshot.get("articles", []) or []
+
+    # require this helper earlier in the file:
+    # from datetime import timedelta
+    # def rank_articles(...):  # already added in earlier step
     sorted_articles = rank_articles(all_articles, topics)
 
     show_more = request.args.get("more") == "1"
     articles_display = sorted_articles if show_more else sorted_articles[:3]
     has_more = len(sorted_articles) > 3
 
-    topic_reso = summarize_topic_resonance(topics, snapshot, user_text)
+    # 3) Lightweight GPT-style summary (heuristic stub)
+    # def summarize_topic_resonance(...):  # already added in earlier step
+    topic_resonance = summarize_topic_resonance(topics, snapshot, user_text)
+
+    # 4) Recompute population results on the fly (no session storage)
+    pops = _get_population_names()
+    if not pops:
+        pops = ["Toimittajat","Pk-yrityspäättäjät","Sijoittajat","Korkeakoulutetut 25–44","Kriittinen kansalaisyleisö","Koko Suomi 18–65"]
+
+    results_list = []
+    for name in pops:
+        s, d, c = estimate_resonance(user_text, name, snapshot)
+        results_list.append({"name": name, "score": s, "decision": d, "confidence": c})
+    results_list.sort(key=lambda r: r["score"])
 
     return render_template(
         "results.html",
@@ -278,7 +295,7 @@ def results():
         articles=articles_display,
         has_more=has_more,
         show_more=show_more,
-        topic_resonance=topic_reso,
+        topic_resonance=topic_resonance,
         snapshot=snapshot,
         results=results_list,
     )
@@ -312,16 +329,6 @@ def add_population():
     save_population(name, "FI", personas)
 
     # Rerun scoring
-    run_id = session.get("current_run_id")
-    snapshot = get_news_analysis(run_id) or {}
-    content = (get_run_content(run_id) or "") if run_id else ""
-    pops = _get_population_names()
-    results = []
-    for n in pops:
-        s, d, c = estimate_resonance(content, n, snapshot)
-        results.append({"name": n, "score": s, "decision": d, "confidence": c})
-    results.sort(key=lambda r: r["score"])
-    session["results"] = results
     return redirect(url_for("results"))
 
 @app.get("/suggestions/<path:pop_name>")
