@@ -372,6 +372,8 @@ def analyze():
 
     # Keep your original calling style (positional args) to avoid signature drift
     sid = get_sid()
+    lang = (session.get("lang") or "fi").lower()
+    get_or_create_user_session(sid, lang)
     gpt_contexts = prepare_gpt_contexts(content, selected_dt_files)
     session["gpt_contexts_count"] = len(gpt_contexts)
 
@@ -522,6 +524,15 @@ def pop_suggestions(pop_name):
 
 @app.get("/set_lang/<code>")
 def set_lang(code):
+    code = (code or "fi").lower()
+    session["lang"] = code
+    try:
+        sid = session.get("sid")
+        if sid:
+            get_or_create_user_session(sid, code)
+    except Exception:
+        # non-fatal: still keep it in cookie-session
+        pass
     flash(_("Kielivalinta tallennettu: ") + code.upper())
     return redirect(request.referrer or url_for("index"))
 
