@@ -306,9 +306,20 @@ def summarize_topic_resonance(topics: list[str], snapshot: dict, text: str) -> s
     else:
         lines.append("Kokonaiskuva: Mediasää on neutraali — viesti voi omia agendan selkeällä kulmalla.")
     lines.append(f"Keskeiset teemat: {tops}")
-    if topics:
-        lines.append(f"Resonanssi: viesti osuu teemoihin '{topics[0]}' ja '{topics[1]}' (jos mainittu), "
-                     "mutta varmista, että ingressi sanoo asian suoraan ensimmäisessä virkkeessä.")
+    if len(topics) >= 2:
+        lines.append(
+            f"Resonanssi: viesti osuu teemoihin '{topics[0]}' ja '{topics[1]}' (jos mainittu), "
+            "mutta varmista, että ingressi sanoo asian suoraan ensimmäisessä virkkeessä."
+        )
+    elif len(topics) == 1:
+        lines.append(
+            f"Resonanssi: viesti osuu teemaan '{topics[0]}' (jos mainittu), "
+            "mutta varmista, että ingressi sanoo asian suoraan ensimmäisessä virkkeessä."
+        )
+    else:
+        lines.append(
+            "Resonanssi: ei tunnistettuja teemoja (MVP) — kirkasta viestin kulma ingressissä."
+        )
     lines.append("Nopea parannus: lisää 1 konkreettinen datapiste ja CTA viimeiseen kappaleeseen.")
     return "\n".join(lines)
 
