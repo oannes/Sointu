@@ -363,9 +363,7 @@ def analyze():
 
     # Prepare GPT contexts now (so you can call your GPT layer where you want)
     # You can also stash this into DB if preferred.
-    gpt_contexts = prepare_gpt_contexts(content, selected_dt_files)
-    session["gpt_contexts_count"] = len(gpt_contexts)
-
+    # Read inputs BEFORE using them anywhere
     title = (request.form.get("title") or "").strip()
     content = (request.form.get("content") or "").strip()
     if not content:
@@ -374,7 +372,8 @@ def analyze():
 
     # Keep your original calling style (positional args) to avoid signature drift
     sid = get_sid()
-    get_or_create_user_session(sid, "fi")
+    gpt_contexts = prepare_gpt_contexts(content, selected_dt_files)
+    session["gpt_contexts_count"] = len(gpt_contexts)
 
     run_id = create_run(sid, None, content_text=content, title=title or None)
     snapshot = build_mediasaa_snapshot(content)
@@ -425,6 +424,7 @@ def results():
     # 1) Load data from DB, not from session
     snapshot = get_news_analysis(run_id) or {}
     user_text = (get_run_content(run_id) or "").strip()
+    target_audiences = []  # ensure defined for both branches
 
     # 2) Topics & news ranking
     topics = snapshot.get("topics", [])
@@ -459,7 +459,7 @@ def results():
 
     results = []
     for name in target_audiences:
-        s, d, c = estimate_resonance(content, name, snapshot)
+        s, d, c = estimate_resonance(user_text, name, snapshot)
         results.append({"name": name, "score": s, "decision": d, "confidence": c})
     results.sort(key=lambda r: r["score"])
 
@@ -474,7 +474,7 @@ def results():
         show_more=show_more,
         topic_resonance=topic_resonance,
         snapshot=snapshot,
-        results=results_list,
+        results=results,
         selected_dt_files=selected_dt_files,
         gpt_contexts_count=session.get("gpt_contexts_count", 0),
     )

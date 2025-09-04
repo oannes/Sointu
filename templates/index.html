@@ -19,7 +19,12 @@
       </select>
       <small>{{ _("Jos valitset vähintään yhden, nämä DT:t välitetään GPT:lle kontekstiksi.") }}</small>
 
-      <hr style="margin:16px 0; opacity:.3">
+     
+    <div class="actions">
+      <button type="submit" class="btn">{{ _("Analysoi mediasää ja resonanssi") }}</button>
+    </div>
+  </form>
+   <hr style="margin:16px 0; opacity:.3">
 
       <!-- Create your own participant (writes a new DT file) -->
       <h3 style="margin:8px 0">{{ _("Luo oma osallistuja (tallennetaan tiedostoksi)") }}</h3>
@@ -41,9 +46,5 @@
           </form>
         </div>
       </div>
-    <div class="actions">
-      <button type="submit" class="btn">{{ _("Analysoi mediasää ja resonanssi") }}</button>
-    </div>
-  </form>
 </div>
 {% endblock %}
