@@ -24,6 +24,138 @@ app.secret_key = os.environ.get("FLASK_SECRET", "dev-secret")
 # Initialize DB once
 setup_database()
 
+# ---------------- Real Participants (DT files) ----------------
+REAL_USERS_DIR = os.environ.get("REAL_USERS_DIR", "./DT")
+
+def _ensure_dir(path: str):
+    if not os.path.isdir(path):
+        os.makedirs(path, exist_ok=True)
+
+# Very small YAML front-matter parser: ---\nkey: val\n...\n---\n<body>
+def _parse_front_matter(text: str) -> tuple[dict, str]:
+    meta, body = {}, text
+    if text.lstrip().startswith("---"):
+        parts = text.lstrip().split("\n", 1)[1].split("\n---", 1)
+        if len(parts) == 2:
+            header, rest = parts
+            for line in header.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"): 
+                    continue
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    meta[k.strip()] = v.strip()
+            # Remove first trailing newline if present
+            body = rest.lstrip("\n")
+    return meta, body
+
+def _read_text(path: str) -> str:
+    with open(path, "r", encoding="utf-8") as f:
+        return f.read()
+
+def _write_text(path: str, s: str):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(s)
+
+def _slugify(name: str) -> str:
+    s = re.sub(r"[^A-Za-z0-9\-_]+", "_", name.strip())
+    return re.sub(r"_+", "_", s).strip("_").lower() or "participant"
+
+def list_dt_files() -> list[dict]:
+    """Return [{'filename', 'name', 'profile'} ...] for all DTs in REAL_USERS_DIR."""
+    _ensure_dir(REAL_USERS_DIR)
+    out = []
+    for fn in os.listdir(REAL_USERS_DIR):
+        if not fn.lower().endswith((".txt", ".md")):
+            continue
+        path = os.path.join(REAL_USERS_DIR, fn)
+        try:
+            raw = _read_text(path)
+            meta, body = _parse_front_matter(raw)
+            name = meta.get("name") or os.path.splitext(fn)[0]
+            profile = meta.get("profile", "")
+            out.append({"filename": fn, "name": name, "profile": profile, "path": path})
+        except Exception:
+            continue
+    # stable order: by name then filename
+    out.sort(key=lambda x: (x["name"].lower(), x["filename"].lower()))
+    return out
+
+def read_dt_file(filename: str) -> dict | None:
+    """Return {'meta': {...}, 'body': '...', 'raw': '...', 'path': '...'} or None."""
+    path = os.path.join(REAL_USERS_DIR, filename)
+    if not os.path.isfile(path):
+        return None
+    raw = _read_text(path)
+    meta, body = _parse_front_matter(raw)
+    return {"meta": meta, "body": body, "raw": raw, "path": path}
+
+def create_dt_file(name: str, profile: str, body: str) -> str:
+    """Create a new DT file with YAML front matter. Returns the filename."""
+    _ensure_dir(REAL_USERS_DIR)
+    slug = _slugify(name)
+    # Ensure uniqueness
+    base = f"{slug}.md"
+    fn = base
+    i = 2
+    while os.path.exists(os.path.join(REAL_USERS_DIR, fn)):
+        fn = f"{slug}-{i}.md"; i += 1
+    front = ["---", f"name: {name}", f"profile: {profile}", "---", ""]
+    _write_text(os.path.join(REAL_USERS_DIR, fn), "\n".join(front) + body.strip() + "\n")
+    return fn
+
+# --- helpers to make plain-text DTs work well ---
+_FIRST_SENTENCE_NAME_RE = re.compile(
+    r"You\s+are\s+(?P<name>[A-Za-zÅÄÖåäö\- ]+)\s*,?\s+(?:a|an)?\s*[^.]*?\s+aged\s+\d{1,3}",
+    re.IGNORECASE
+)
+
+def _infer_name_from_body(body: str, default_name: str) -> str:
+    m = _FIRST_SENTENCE_NAME_RE.search(body or "")
+    if m:
+        return m.group("name").strip()
+    # fallback: first word before comma or first 2 words
+    head = (body or "").split(".", 1)[0]
+    if "," in head:
+        return head.split(",")[0].strip() or default_name
+    return default_name
+
+def prepare_gpt_contexts(run_text: str, selected_filenames: list[str]) -> list[dict]:
+    """
+    For each selected DT file, build a payload ready to send to GPT:
+    - messages: [ {'role':'system','content':DT}, {'role':'user','content':run_text} ]
+    - name: display label
+    - filename: the DT filename
+    """
+    contexts = []
+    for fn in selected_filenames:
+        dt = read_dt_file(fn)  # returns {'meta':{}, 'body':..., 'raw':..., 'path':...}
+        if not dt:
+            continue
+
+        meta, body, raw = dt.get("meta", {}), dt.get("body", ""), dt.get("raw", "")
+        # Prefer explicit 'name' if you later add YAML front-matter; otherwise infer from body
+        display_name = meta.get("name") or _infer_name_from_body(body, os.path.splitext(fn)[0])
+
+        # If you want to add optional per-run “header” before the DT, do it here:
+        # header = f"Context for this review: The following participant description remains authoritative.\n"
+        # dt_text_for_system = header + raw
+        dt_text_for_system = raw  # DT text already starts with "You are ...", which is ideal as a system prompt
+
+        messages = [
+            {"role": "system", "content": dt_text_for_system},
+            {"role": "user", "content": run_text},
+        ]
+
+        contexts.append({
+            "name": display_name,
+            "filename": fn,
+            "messages": messages,
+            # keep 'content' too if your caller expects it:
+            "content": raw,
+        })
+    return contexts
+
 # ---------------- Helpers ----------------
 def get_sid():
     if "sid" not in session:
@@ -217,10 +349,23 @@ def tips_for_population(text: str, pop_name: str, snapshot: dict):
 # ---------------- Routes ----------------
 @app.get("/")
 def index():
-    return render_template("index.html", _=_, title="Sointu")
+    participants = list_dt_files()
+    return render_template("index.html", _=_, title="Sointu", participants=participants)
 
 @app.post("/analyze")
 def analyze():
+
+    # NEW: selected DTs from the form (file names)
+    selected_dt_files = request.form.getlist("participants")  # list of filenames
+
+    # Optionally persist choice for results page / next steps
+    session["selected_dt_files"] = selected_dt_files
+
+    # Prepare GPT contexts now (so you can call your GPT layer where you want)
+    # You can also stash this into DB if preferred.
+    gpt_contexts = prepare_gpt_contexts(content, selected_dt_files)
+    session["gpt_contexts_count"] = len(gpt_contexts)
+
     title = (request.form.get("title") or "").strip()
     content = (request.form.get("content") or "").strip()
     if not content:
@@ -235,21 +380,44 @@ def analyze():
     snapshot = build_mediasaa_snapshot(content)
     save_news_analysis(run_id, snapshot)
 
-    pops = _get_population_names()
-    if not pops:
-        pops = ["Toimittajat","Pk-yrityspäättäjät","Sijoittajat","Korkeakoulutetut 25–44","Kriittinen kansalaisyleisö","Koko Suomi 18–65"]
+    target_audiences = []
+    if selected_dt_files:
+        # Use the DT “name” from file meta for display/scoring label
+        for fn in selected_dt_files:
+            dt = read_dt_file(fn)
+            display_name = (dt and (dt["meta"].get("name") or fn)) or fn
+            target_audiences.append(display_name)
+    else:
+        pops = _get_population_names() or [
+            "Toimittajat","Pk-yrityspäättäjät","Sijoittajat",
+            "Korkeakoulutetut 25–44","Kriittinen kansalaisyleisö","Koko Suomi 18–65"
+        ]
+        target_audiences = pops
 
     results = []
-    for name in pops:
+    for name in target_audiences:
         s, d, c = estimate_resonance(content, name, snapshot)
         results.append({"name": name, "score": s, "decision": d, "confidence": c})
-    results.sort(key=lambda r: r["score"])  # worst first
+    results.sort(key=lambda r: r["score"])
 
     session["current_run_id"] = run_id
     return redirect(url_for("results"))
 
+@app.post("/participants/new")
+def create_participant():
+    name = (request.form.get("p_name") or "").strip()
+    profile = (request.form.get("p_profile") or "").strip()
+    body = (request.form.get("p_body") or "").strip()
+    if not name or not body:
+        flash(_("Anna vähintään nimi ja DT-teksti."))
+        return redirect(url_for("index"))
+    fn = create_dt_file(name, profile, body)
+    flash(_("Luotu osallistuja: ") + name + f" ({fn})")
+    return redirect(url_for("index"))
+
 @app.get("/results")
 def results():
+    selected_dt_files = session.get("selected_dt_files") or []
     run_id = session.get("current_run_id")
     if not run_id:
         return redirect(url_for("index"))
@@ -276,15 +444,24 @@ def results():
     topic_resonance = summarize_topic_resonance(topics, snapshot, user_text)
 
     # 4) Recompute population results on the fly (no session storage)
-    pops = _get_population_names()
-    if not pops:
-        pops = ["Toimittajat","Pk-yrityspäättäjät","Sijoittajat","Korkeakoulutetut 25–44","Kriittinen kansalaisyleisö","Koko Suomi 18–65"]
+    if selected_dt_files:
+        # Use the DT “name” from file meta for display/scoring label
+        for fn in selected_dt_files:
+            dt = read_dt_file(fn)
+            display_name = (dt and (dt["meta"].get("name") or fn)) or fn
+            target_audiences.append(display_name)
+    else:
+        pops = _get_population_names() or [
+            "Toimittajat","Pk-yrityspäättäjät","Sijoittajat",
+            "Korkeakoulutetut 25–44","Kriittinen kansalaisyleisö","Koko Suomi 18–65"
+        ]
+        target_audiences = pops
 
-    results_list = []
-    for name in pops:
-        s, d, c = estimate_resonance(user_text, name, snapshot)
-        results_list.append({"name": name, "score": s, "decision": d, "confidence": c})
-    results_list.sort(key=lambda r: r["score"])
+    results = []
+    for name in target_audiences:
+        s, d, c = estimate_resonance(content, name, snapshot)
+        results.append({"name": name, "score": s, "decision": d, "confidence": c})
+    results.sort(key=lambda r: r["score"])
 
     return render_template(
         "results.html",
@@ -298,6 +475,8 @@ def results():
         topic_resonance=topic_resonance,
         snapshot=snapshot,
         results=results_list,
+        selected_dt_files=selected_dt_files,
+        gpt_contexts_count=session.get("gpt_contexts_count", 0),
     )
 
 @app.post("/populations/new")

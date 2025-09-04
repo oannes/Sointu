@@ -2,6 +2,18 @@
 {% block content %}
 <h1>{{ _("Tulokset") }}</h1>
 
+{% if selected_dt_files and selected_dt_files|length > 0 %}
+  <div class="card" style="border-left:4px solid #4b9cdb">
+    <strong>{{ _("Käytetyt DT-tiedostot") }}:</strong>
+    <ul style="margin:6px 0 0 16px">
+      {% for fn in selected_dt_files %}
+        <li><code>{{ fn }}</code></li>
+      {% endfor %}
+    </ul>
+    <small>{{ _("Valmisteltuja GPT-konteksteja") }}: {{ gpt_contexts_count }}</small>
+  </div>
+{% endif %}
+
 <!-- 1) User-submitted message -->
 <div class="card">
   <h3>{{ _("Syötetty viesti") }}</h3>
