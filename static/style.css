@@ -198,3 +198,30 @@ code, pre{ font-family: var(--mono); background:#F8FAFC; border:1px solid var(--
   .pop-row{ grid-template-columns: 1fr; }
   .pop-row .cta{ justify-self:start; }
 }
+
+.news-row{
+  display:grid;
+  grid-template-columns: 1fr auto;
+  align-items:center;
+  gap:12px;
+}
+.news-row .meta small{ color: var(--muted); }
+
+/* Ghost/outline-nappi uutisiin */
+.btn.ghost{
+  background: transparent;
+  color: var(--accent-600);
+  border: 1px solid var(--line);
+  box-shadow: none;
+}
+.btn.ghost:hover{
+  background: var(--accent-50);
+  text-decoration: none;
+}
+.btn.sm{ padding: 8px 12px; font-size: 14px; }
+
+/* Mobiilissa nappi alle ja vasemmalle */
+@media (max-width: 720px){
+  .news-row{ grid-template-columns: 1fr; }
+  .news-row .btn{ justify-self: start; margin-top: 6px; }
+}
