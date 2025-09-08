@@ -67,21 +67,32 @@
 <div class="card">
   <h3>{{ _("Populaatiot & resonanssi") }}</h3>
   <div class="list">
-    {% for r in results %}
-      <div class="pop-row">
-        <div>
-          <strong>{{ r.name }}</strong><br>
+  {% for r in results %}
+    <div class="pop-row">
+      <div class="meta">
+        <strong>{{ r.name }}</strong>
+        <div class="sub">
           <small>{{ _("Luottamus") }}: {{ (r.confidence*100)|round(0) }}%</small>
+          <span class="dot">•</span>
+          <small>{{ _("Pisteet") }}: {{ r.score }}/100</small>
         </div>
-        <div class="pill {{ r.decision|lower|replace('no-go','no-go') }}">{{ r.decision }}</div>
-        <div><small>{{ _("Pisteet") }}: {{ r.score }}/100</small></div>
-        {% if r.decision != "GO" %}
-          <div><a class="btn" href="{{ url_for('pop_suggestions', pop_name=r.name) }}">{{ _("Katso suositukset resonanssin parantamiseksi") }}</a></div>
-        {% endif %}
       </div>
-      {% if not loop.last %}<hr>{% endif %}
-    {% endfor %}
-  </div>
+
+      <div class="pill {{ r.decision|lower|replace('no-go','no-go') }}">
+        {{ r.decision }}
+      </div>
+
+      {% if r.decision != "GO" %}
+        <a class="btn sm cta" href="{{ url_for('pop_suggestions', pop_name=r.name) }}">
+          {{ _("Katso suositukset resonanssin parantamiseksi") }}
+        </a>
+      {% else %}
+        <span></span> {# pitää gridin tasapainossa, ei-näkyvä täyte #}
+      {% endif %}
+    </div>
+    {% if not loop.last %}<hr>{% endif %}
+  {% endfor %}
+</div>
 </div>
 
 <!-- 6) Add new populations 

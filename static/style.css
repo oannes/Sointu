@@ -167,3 +167,34 @@ code, pre{ font-family: var(--mono); background:#F8FAFC; border:1px solid var(--
   box-shadow: 0 1px 2px rgba(16,24,40,0.06), 0 12px 28px rgba(16,24,40,0.08);
   transition: box-shadow .2s ease;
 }
+
+.pop-row{
+  display:grid;
+  grid-template-columns: 1fr auto auto; /* meta | pill | CTA */
+  align-items:center;
+  gap:12px;
+}
+
+/* Meta-alueen pieni väli ja piste-erotin */
+.pop-row .meta .sub{ display:flex; align-items:center; gap:8px; color:var(--muted); }
+.pop-row .meta .sub .dot{ opacity:.6; }
+
+/* Päätöspilleri */
+.pill{
+  display:inline-flex; align-items:center; justify-content:center;
+  padding:6px 12px; border-radius:999px; font-weight:700; font-size:12px;
+  border:1px solid var(--line);
+}
+.pill.go{     background:#ECFDF5; color:#065F46; border-color:#A7F3D0; }
+.pill.tweak{  background:#FFFBEB; color:#92400E; border-color:#FCD34D; }
+.pill.no-go{  background:#FEF2F2; color:#991B1B; border-color:#FCA5A5; }
+
+/* CTA-nappi oikealle; sm-koko */
+.pop-row .cta{ justify-self:end; }
+.btn.sm{ padding:8px 12px; font-size:14px; }
+
+/* Mobiilissa pinotaan siististi ja CTA vasempaan laitaan */
+@media (max-width: 720px){
+  .pop-row{ grid-template-columns: 1fr; }
+  .pop-row .cta{ justify-self:start; }
+}
