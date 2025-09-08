@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from openai import OpenAI
 
 SANITY_GATE_ENABLED = os.environ.get("SANITY_GATE_ENABLED", "1") != "0"
-SANITY_GATE_MODEL = os.environ.get("SANITY_GATE_MODEL", "gpt-5")
+SANITY_GATE_MODEL = os.environ.get("SANITY_GATE_MODEL", "gpt-4o-mini")
 
 _openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
