@@ -4,9 +4,13 @@ from datetime import datetime
 from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from openai import OpenAI
+import json
 
 SANITY_GATE_ENABLED = os.environ.get("SANITY_GATE_ENABLED", "1") != "0"
 SANITY_GATE_MODEL = os.environ.get("SANITY_GATE_MODEL", "gpt-4o-mini")
+REVIEW_MODEL = os.environ.get("REVIEW_MODEL", "gpt-5")
+REVIEW_TEMPERATURE = float(os.environ.get("REVIEW_TEMPERATURE", "0"))
+
 
 _openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -91,6 +95,45 @@ def gpt_quality_gate(text: str) -> str:
     except Exception:
         # Häiriössä älä estä käyttöä
         return "good"
+
+def score_with_llm(user_text: str, dt_body: str) -> dict:
+    """
+    Returns: {"score": int 0-100, "decision": "GO"/"TWEAK"/"NO-GO", "confidence": float, "reason": str}
+    """
+    if not dt_body:
+        # fallback if the DT couldn't be read
+        s, d, c = estimate_resonance(user_text, "default", build_mediasaa_snapshot(user_text))
+        return {"score": s, "decision": d, "confidence": c, "reason": "fallback"}
+
+    system_prompt = (
+        dt_body.strip() + "\n\n"
+        "TASK: Evaluate the USER's message for resonance with your perspective. "
+        "Return ONLY JSON with fields: score (0-100), decision (GO|TWEAK|NO-GO), reason (one short sentence)."
+    )
+
+    try:
+        r = _openai_client.chat.completions.create(
+            model=REVIEW_MODEL,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_text},
+            ],
+            temperature=REVIEW_TEMPERATURE,
+            max_tokens=200,
+        )
+        txt = (r.choices[0].message.content or "").strip()
+        # be tolerant if the model wraps JSON in prose
+        i, j = txt.find("{"), txt.rfind("}")
+        data = json.loads(txt[i:j+1]) if i != -1 and j != -1 else {}
+    except Exception:
+        data = {}
+
+    score = int(data.get("score", 60))
+    decision = data.get("decision") or ("GO" if score >= 70 else ("TWEAK" if score >= 50 else "NO-GO"))
+    reason = data.get("reason", "")
+    # simple static confidence; you can tune this
+    confidence = 0.64
+    return {"score": score, "decision": decision, "confidence": confidence, "reason": reason}
 
 def _ensure_dir(path: str):
     if not os.path.isdir(path):
@@ -542,9 +585,25 @@ def results():
         target_audiences = pops
 
     results = []
-    for name in target_audiences:
-        s, d, c = estimate_resonance(user_text, name, snapshot)
-        results.append({"name": name, "score": s, "decision": d, "confidence": c})
+    if selected_dt_files:
+        for fn in selected_dt_files:
+            dt = read_dt_file(fn)
+            display_name = (dt and (dt["meta"].get("name") or fn)) or fn
+            review = score_with_llm(user_text, (dt and dt["body"]) or "")
+            results.append({
+                "name": display_name,
+                "score": review["score"],
+                "decision": review["decision"],
+                "confidence": review["confidence"],
+                # optionally surface reason in UI
+                # "reason": review["reason"],
+            })
+    else:
+        # fallback to your heuristic populations
+        for name in _get_population_names() or [...]:
+            s, d, c = estimate_resonance(user_text, name, snapshot)
+            results.append({"name": name, "score": s, "decision": d, "confidence": c})
+
     results.sort(key=lambda r: r["score"])
 
     return render_template(
