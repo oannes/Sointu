@@ -34,26 +34,22 @@
 <div class="card">
   <h3>{{ _("Sopivat uutiset (viimeiset 14 vrk)") }}</h3>
   <div class="list">
-    {% for a in articles %}
-      <div>
-        <div><strong>{{ a.title }}</strong></div>
+  {% for a in articles %}
+    <div class="news-row">
+      <div class="meta">
+        <div class="title"><strong>{{ a.title }}</strong></div>
         <small>{{ a.publisher }}{% if a.published %} — {{ a.published }}{% endif %}</small>
-        {% if a.url %}<div><a href="{{ a.url }}" target="_blank" class="btn secondary">{{ _("Lue") }}</a></div>{% endif %}
       </div>
-      {% if not loop.last %}<hr>{% endif %}
-    {% endfor %}
-    {% if not articles or articles|length == 0 %}
-      <small>{{ _("Ei suoria uutisosumia (MVP).") }}</small>
-    {% endif %}
-  </div>
-  {% if has_more %}
-    <div class="actions">
-      {% if show_more %}
-        <a class="btn secondary" href="{{ url_for('results') }}">{{ _("Näytä vähemmän") }}</a>
-      {% else %}
-        <a class="btn secondary" href="{{ url_for('results', more=1) }}">{{ _("Näytä lisää") }}</a>
+      {% if a.url %}
+        <a href="{{ a.url }}" target="_blank" class="btn ghost sm">{{ _("Lue") }}</a>
       {% endif %}
     </div>
+    {% if not loop.last %}<hr>{% endif %}
+  {% endfor %}
+  {% if not articles or articles|length == 0 %}
+    <small>{{ _("Ei suoria uutisosumia (MVP).") }}</small>
+  {% endif %}
+</div>
   {% endif %}
 </div>
 
