@@ -69,6 +69,9 @@
           <small>{{ _("Luottamus") }}: {{ (r.confidence*100)|round(0) }}%</small>
           <span class="dot">•</span>
           <small>{{ _("Pisteet") }}: {{ r.score }}/100</small>
+          {% if r.reason %}
+            <div class="sub"><small>{{ r.reason }}</small></div>
+          {% endif %}
         </div>
       </div>
 

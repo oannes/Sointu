@@ -5,6 +5,7 @@ from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from openai import OpenAI
 import json
+import math
 
 SANITY_GATE_ENABLED = os.environ.get("SANITY_GATE_ENABLED", "1") != "0"
 SANITY_GATE_MODEL = os.environ.get("SANITY_GATE_MODEL", "gpt-4o-mini")
@@ -98,42 +99,80 @@ def gpt_quality_gate(text: str) -> str:
 
 def score_with_llm(user_text: str, dt_body: str) -> dict:
     """
-    Returns: {"score": int 0-100, "decision": "GO"/"TWEAK"/"NO-GO", "confidence": float, "reason": str}
+    Returns:
+      {
+        "score": int 0..100,
+        "decision": "GO"|"TWEAK"|"NO-GO",
+        "confidence": float 0..1,
+        "reason": str
+      }
     """
-    if not dt_body:
-        # fallback if the DT couldn't be read
+    # If DT empty, fallback to heuristic
+    if not (dt_body or "").strip():
         s, d, c = estimate_resonance(user_text, "default", build_mediasaa_snapshot(user_text))
-        return {"score": s, "decision": d, "confidence": c, "reason": "fallback"}
+        return {"score": s, "decision": d, "confidence": c, "reason": "fallback: no DT body"}
 
     system_prompt = (
-        dt_body.strip() + "\n\n"
-        "TASK: Evaluate the USER's message for resonance with your perspective. "
-        "Return ONLY JSON with fields: score (0-100), decision (GO|TWEAK|NO-GO), reason (one short sentence)."
+        dt_body.strip()
+        + "\n\n"
+        "TASK: You are the reviewer described above. Evaluate the USER's message for resonance "
+        "with your perspective.\n"
+        "Output ONLY a compact JSON object with these fields:\n"
+        "{\n"
+        '  "score": <integer 0-100>,\n'
+        '  "decision": "GO" | "TWEAK" | "NO-GO",\n'
+        '  "confidence": <number 0-1>,\n'
+        '  "reason": <short one-sentence justification>\n'
+        "}\n"
+        "Calibration for confidence (probability your decision is appropriate):\n"
+        "- 0.50 = guess; 0.55 = low; 0.70 = moderate; 0.85 = high; 0.95 = very high.\n"
+        "Be honest and avoid 1.0 unless you are nearly certain. No extra text."
     )
 
     try:
         r = _openai_client.chat.completions.create(
-            model=REVIEW_MODEL,
+            model=REVIEW_MODEL,                # e.g. "gpt-5"
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_text},
             ],
-            temperature=REVIEW_TEMPERATURE,
+            temperature=REVIEW_TEMPERATURE,   # keep 0 for consistency
             max_tokens=200,
         )
         txt = (r.choices[0].message.content or "").strip()
-        # be tolerant if the model wraps JSON in prose
         i, j = txt.find("{"), txt.rfind("}")
         data = json.loads(txt[i:j+1]) if i != -1 and j != -1 else {}
     except Exception:
         data = {}
 
-    score = int(data.get("score", 60))
-    decision = data.get("decision") or ("GO" if score >= 70 else ("TWEAK" if score >= 50 else "NO-GO"))
-    reason = data.get("reason", "")
-    # simple static confidence; you can tune this
-    confidence = 0.64
-    return {"score": score, "decision": decision, "confidence": confidence, "reason": reason}
+    # Robust parsing & normalization
+    score = data.get("score")
+    try:
+        score = int(score)
+    except Exception:
+        score = 60
+    score = max(0, min(100, score))
+
+    decision = data.get("decision")
+    if decision not in ("GO", "TWEAK", "NO-GO"):
+        decision = "GO" if score >= 70 else ("TWEAK" if score >= 50 else "NO-GO")
+
+    conf = data.get("confidence")
+    try:
+        conf = float(conf)
+    except Exception:
+        conf = None
+
+    # Normalize weird confidences (e.g., 62 -> 0.62; 98 -> 0.98)
+    if conf is None or math.isnan(conf):
+        conf = 0.64  # fallback
+    elif conf > 1.0 and conf <= 100.0:
+        conf = conf / 100.0
+    conf = max(0.5, min(0.98, conf))  # keep in a sensible band
+
+    reason = (data.get("reason") or "").strip()
+
+    return {"score": score, "decision": decision, "confidence": round(conf, 2), "reason": reason}
 
 def _ensure_dir(path: str):
     if not os.path.isdir(path):
