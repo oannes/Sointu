@@ -22,7 +22,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Constants
 MAX_RETRY_ATTEMPTS = 3
-MODEL = "gpt-4o-mini"
+MODEL = "gpt-5"
 
 
 def normalize_logprobs(logprobs, temperature=1.5):

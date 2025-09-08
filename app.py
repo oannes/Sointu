@@ -3,7 +3,12 @@ import os, re, random
 from datetime import datetime
 from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
-import unicodedata
+from openai import OpenAI
+
+SANITY_GATE_ENABLED = os.environ.get("SANITY_GATE_ENABLED", "1") != "0"
+SANITY_GATE_MODEL = os.environ.get("SANITY_GATE_MODEL", "gpt-5")
+
+_openai_client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # Use your original package structure (no broad fallbacks)
 from models.db_utils import (
@@ -27,6 +32,65 @@ setup_database()
 
 # ---------------- Real Participants (DT files) ----------------
 REAL_USERS_DIR = os.environ.get("REAL_USERS_DIR", "./DT")
+
+def gpt_quality_gate(text: str) -> str:
+    """
+    Palauttaa 'good' tai 'bad'.
+    'bad' = hyvin vähäpanoksinen: placeholder, testiviesti, URL-only, näppäinhakkaus,
+           toistoa ilman sisältöä, pelkkää emoji- tai huutomerkki-spämmiä, ALLCAPS-huuto.
+    """
+    try:
+        messages = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a strict quality gate for user-submitted media messages.\n"
+                    "Classify the user's message as 'good' (meaningful, non-placeholder) or 'bad' "
+                    "(very low effort). Consider 'bad' if it matches any of: placeholders (e.g., "
+                    "lorem ipsum, test, hello world, TBD/TBA/coming soon), URL-only, keyboard mashing "
+                    "(qwerty/asdf/12345), repeated filler (e.g., 'foo foo foo foo'), excessive emoji "
+                    "with no content, or ALLCAPS shouting with punctuation spam.\n"
+                    "Return EXACTLY one word: good or bad. No punctuation. No explanations."
+                ),
+            },
+            {
+                "role": "system",
+                "content": (
+                    "Bad examples:\n"
+                    "- lorem ipsum dolor sit amet\n"
+                    "- test\n"
+                    "- hello world\n"
+                    "- https://example.com\n"
+                    "- foo foo foo foo\n"
+                    "- 😂😂😂😂😂\n"
+                    "- HELLO!!!!!!\n"
+                    "- TBD / TBA / coming soon\n"
+                    "- qwerty / asdf / 12345"
+                ),
+            },
+            {
+                "role": "system",
+                "content": (
+                    "Good examples:\n"
+                    "- Launches on 15 Oct: we cut onboarding time by 32% for SMBs. Join the waitlist.\n"
+                    "- Tänään julkistus: uusi tuote vähentää energiankulutusta 12 % teollisuuden linjoissa.\n"
+                    "- Muistutus: blogiartikkeli julkaistaan huomenna klo 10, linkki liitteenä."
+                ),
+            },
+            {"role": "user", "content": (text or "").strip()},
+        ]
+
+        resp = _openai_client.chat.completions.create(
+            model=SANITY_GATE_MODEL,
+            messages=messages,
+            temperature=0,
+            max_tokens=1,  # pakottaa "good"/"bad"
+        )
+        out = (resp.choices[0].message.content or "").strip().lower()
+        return "bad" if out.startswith("bad") else "good"
+    except Exception:
+        # Häiriössä älä estä käyttöä
+        return "good"
 
 def _ensure_dir(path: str):
     if not os.path.isdir(path):
@@ -380,6 +444,12 @@ def analyze():
     content = (request.form.get("content") or "").strip()
     if not content:
         flash(_("Syötä sisältö ensin."))
+        return redirect(url_for("index"))
+    # Roskafiltteri (GPT) – estä arviointi, jos viesti on "bad"
+    if SANITY_GATE_ENABLED and gpt_quality_gate(content) == "bad":
+        session["user_content"] = content  # pidä teksti kentässä korjauksia varten
+        flash(_("Heikkolaatuinen syöte havaittu. Järjestelmä oppii julkaisutyylistäsi. "
+                "Siksi viestisi ei edennyt arviointiin."))
         return redirect(url_for("index"))
 
     # Keep your original calling style (positional args) to avoid signature drift
