@@ -3,6 +3,7 @@ import os, re, random
 from datetime import datetime
 from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, session, flash
+import unicodedata
 
 # Use your original package structure (no broad fallbacks)
 from models.db_utils import (

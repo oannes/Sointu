@@ -9,7 +9,7 @@
     <input type="text" name="title" placeholder="{{ _('Otsikko tai kuvaus') }}">
     <label>{{ _("Sisältö (teksti)") }}</label>
     <textarea name="content" placeholder="{{ _('Liitä viestisi tähän…') }}" autofocus style="min-height: 200px">{{ session.get('user_content','') }}</textarea>
-    <label style="margin-top:10px">{{ _("Valitse 'oikeat ihmiset' tiedostoista (valinnainen)") }}</label>
+    <label style="margin-top:10px">{{ _("Populaatio: Asiantuntijat") }}</label>
       <select name="participants" multiple size="6" style="width:100%">
         {% for p in participants %}
           <option value="{{ p.filename }}">
@@ -21,30 +21,10 @@
 
      
     <div class="actions">
-      <button type="submit" class="btn">{{ _("Analysoi mediasää ja resonanssi") }}</button>
+      <button type="submit" class="btn">{{ _("Selvitä kuinka hyvin viestisi resonanoi nykyisessä mediasäässä") }}</button>
     </div>
   </form>
    <hr style="margin:16px 0; opacity:.3">
 
-      <!-- Create your own participant (writes a new DT file) -->
-      <h3 style="margin:8px 0">{{ _("Luo oma osallistuja (tallennetaan tiedostoksi)") }}</h3>
-      <div class="card" style="background:#fafafa">
-        <div class="inline-form">
-          <form method="post" action="{{ url_for('create_participant') }}">
-            <label>{{ _("Nimi") }}</label>
-            <input type="text" name="p_name" placeholder="Etunimi Sukunimi">
-
-            <label>{{ _("Profiili (valinnainen)") }}</label>
-            <input type="text" name="p_profile" placeholder="Esim. Strategi, 31, energia-ala">
-
-            <label>{{ _("DT-teksti (runko)") }}</label>
-            <textarea name="p_body" placeholder="Liitä koko DT-kuvaus tähän (prompt/bio)..." style="min-height: 160px"></textarea>
-
-            <div class="actions" style="margin-top:8px">
-              <button class="btn secondary" type="submit">{{ _("Tallenna osallistuja tiedostoksi") }}</button>
-            </div>
-          </form>
-        </div>
-      </div>
 </div>
 {% endblock %}
